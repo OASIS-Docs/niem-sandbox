@@ -10,7 +10,121 @@ from pathlib import Path
 # Initialize logging to print to console
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-OASIS_CSS_URL = 'https://docs.oasis-open.org/templates/css/markdown-styles-v1.7.3a.css'
+# Hardcoded stylesheet (upgraded for Mikey, 2025-04-14)
+INLINE_CSS = """
+<style>
+/* OASIS specification styles for HTML generated from Markdown or similar sources */
+/* Upgraded by ChatGPT for Mikey, 2025-04-14 */
+
+body {
+    margin-left: 3pc;
+    margin-right: 3pc;
+    font-family: LiberationSans, Arial, Helvetica, sans-serif;
+    font-size:12pt;
+    line-height:1.2;
+}
+
+html {
+    overflow-x: auto;
+}
+
+h1 { font-size:18pt; }
+h2 { font-size:14pt; }
+h3 { font-size:13pt; }
+h4 { font-size:12pt; }
+h5 { font-size:11pt; }
+h1big { font-size: 24pt; }
+h1, h2, h3, h4, h5, h1big {
+    font-family: LiberationSans, Arial, Helvetica, sans-serif;
+    font-weight: bold;
+    margin:8pt 0;
+    color: #446CAA;
+}
+
+/* style for gray "OASIS Committee Note" text */
+h1gray {
+    font-size:18pt;
+    font-family: LiberationSans, Arial, Helvetica, sans-serif;
+    font-weight: bold;
+    color: #717171;
+}
+
+/* style for h6, for use as Reference tag */
+h6 {
+    font-size:12pt; 
+    line-height:1.0;
+    font-family: LiberationSans, Arial, Helvetica, sans-serif;
+    font-weight: bold;
+    margin:0pt;
+}
+
+/* Fix applied: Avoid page break before <hr> */
+hr {
+    page-break-before: avoid;
+}
+
+/* Table styles - bordered with option for striped */
+table {
+    border-collapse: collapse;
+    width:100%;
+    display:table;
+    font-size:12pt;
+    margin-top: 6pt;
+}
+
+table, th, td {
+    border: 1pt solid black;
+    padding:6pt 6pt;
+    text-align:left;
+    vertical-align:top;
+}
+
+th {
+    color:#ffffff;
+    background-color:#1a8cff;
+}
+
+/* --- Enhanced Code Block Styling --- */
+pre, code {
+    font-family: "Courier New", Courier, monospace;
+    font-size: 10.5pt;
+    background-color: #f4f4f4;
+    color: #111;
+    line-height: 1.4;
+    white-space: pre;
+    overflow-x: auto;
+    padding: 8pt 10pt;
+    margin: 8pt 0;
+    display: block;
+    border: 1pt solid #ccc;
+    border-radius: 3pt;
+    page-break-inside: avoid;
+}
+
+/* Inline <code> in text (not inside <pre>) */
+code:not(pre code) {
+    display: inline;
+    padding: 1pt 2pt;
+    background-color: #eeeeee;
+    border-radius: 2pt;
+    border: 0.5pt solid #ccc;
+    font-size: 10pt;
+    white-space: nowrap;
+}
+
+/* Fix to avoid display corruption in PDF */
+pre {
+    word-wrap: normal;
+    white-space: pre;
+}
+
+/* offset block quote */
+blockquote {
+    border-left: 5px solid #ccc;
+    padding-left: 10px;
+}
+</style>
+"""
 
 class PDFGenerator:
     def __init__(self, html_file, pdf_file, date_str):
@@ -19,21 +133,18 @@ class PDFGenerator:
         self.date_str = date_str
 
     def inject_css_inline(self, html_path):
-        import requests
-
-        logging.info("Injecting remote stylesheet into HTML as inline <style> block")
-        css_resp = requests.get(OASIS_CSS_URL)
-        css_resp.raise_for_status()
-        css_content = css_resp.text
-
+        logging.info("Injecting hardcoded CSS into HTML as inline <style> block")
         with open(html_path, 'r', encoding='utf-8') as f:
             html = f.read()
 
-        # Replace <link href=OASIS> with <style>...</style>
-        html = html.replace(
-            f'<link rel="stylesheet" href="{OASIS_CSS_URL}" />',
-            f'<style>\n{css_content}\n</style>'
-        )
+        # Insert INLINE_CSS block before </head>
+        if '</head>' in html:
+            html = html.replace('</head>', INLINE_CSS + "\n</head>")
+        elif '<head>' in html:
+            html = html.replace('<head>', '<head>\n' + INLINE_CSS)
+        else:
+            # If no head tag is found, just prepend the CSS block
+            html = INLINE_CSS + html
 
         temp_path = Path(html_path).with_name(f"{Path(html_path).stem}-inline.html")
         with open(temp_path, 'w', encoding='utf-8') as f:
@@ -48,7 +159,7 @@ class PDFGenerator:
             formatted_date = date_obj.strftime('%d %B %Y')
             year = date_obj.strftime('%Y')
 
-            # Inline CSS
+            # Process HTML to inject inline CSS
             processed_html = self.inject_css_inline(self.html_file)
 
             cli_command = [
@@ -83,7 +194,6 @@ class PDFGenerator:
 def main(html_file, date_str):
     logging.info('Starting PDF generation process for HTML file: %s', html_file)
     pdf_file = html_file.replace('.html', '.pdf')
-
     try:
         pdf_generator = PDFGenerator(html_file, pdf_file, date_str)
         pdf_generator.generate_pdf()
@@ -98,5 +208,4 @@ if __name__ == '__main__':
     parser.add_argument('html_file', type=str, help='The HTML file to convert')
     parser.add_argument('date_str', type=str, help='The date string in yyyy-mm-dd format')
     args = parser.parse_args()
-
     main(args.html_file, args.date_str)
