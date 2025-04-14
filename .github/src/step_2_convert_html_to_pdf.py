@@ -10,12 +10,10 @@ from pathlib import Path
 # Initialize logging to print to console
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# Hardcoded stylesheet (upgraded for Mikey, 2025-04-14)
 # Added !important and a fallback to "Liberation Mono"
 INLINE_CSS = """
 <style>
 /* OASIS specification styles for HTML generated from Markdown or similar sources */
-/* Upgraded by ChatGPT for Mikey, 2025-04-14 */
 
 body {
     margin-left: 3pc;
@@ -88,7 +86,7 @@ th {
 /* --- Enhanced Code Block Styling with !important --- */
 pre, code {
     font-family: "Courier New", "Liberation Mono", Courier, monospace !important;
-    font-size: 10.5pt !important;
+    font-size: 10.0pt !important;
     background-color: #f4f4f4 !important;
     color: #111 !important;
     line-height: 1.4 !important;
