@@ -1,0 +1,122 @@
+name: 1.0 - Convert Markdown -> HTML
+
+on:
+  workflow_dispatch:
+    inputs:
+      sync_path:
+        description: |
+          Path to the directory with the markdown file to convert to HTML.
+          Example: ndr/v1.0/psd01
+          Ensure the path is copied from GitHub and formatted correctly.
+        required: true
+
+jobs:
+  convert-and-commit:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+      actions: write
+
+    steps:
+      # Step 1: Checkout the repository
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # Fetch all history for all branches and tags
+
+
+      # Step 2: Validate inputs
+      - name: Validate inputs
+        run: |
+          set -e
+          SYNC_PATH="${{ github.event.inputs.sync_path }}"
+
+          echo "Received SYNC_PATH: $SYNC_PATH"
+          echo "Received MODIFY_DATE: $MODIFY_DATE"
+
+          # Validate file path
+          if [ ! -d "$SYNC_PATH" ]; then
+            echo "Invalid SYNC_PATH. Directory does not exist: $SYNC_PATH"
+            exit 1
+          fi
+
+          echo "SYNC_PATH=$SYNC_PATH" >> $GITHUB_ENV
+
+      # Step 3: Setup Node.js environment
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '14'
+          # Removed cache: 'npm' since there is no package-lock.json or yarn.lock
+
+
+      # Step 4: Install Prettier globally
+      - name: Install Prettier
+        run: npm install -g prettier
+
+      # Step 5: Setup Python environment
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      # Step 6: Install Python dependencies
+      - name: Install Python dependencies
+        run: |
+          echo "Installing dependencies"
+          cd .github/src
+          echo "Inside src directory: $(pwd)"
+          ls -ltra
+          python3 -m venv venv
+          source venv/bin/activate
+          pip install --upgrade pip
+          pip install beautifulsoup4 requests
+          sudo apt-get update
+          sudo apt-get install -y pandoc
+        shell: bash
+
+      # Step 7: Format MD and Convert to HTML
+      - name: Format MD and Convert to HTML
+        env:
+          SYNC_PATH: ${{ env.SYNC_PATH }}
+          MODIFY_DATE: ${{ env.MODIFY_DATE }}
+          GIT_REPO_BASEDIR: ${{ github.workspace }}
+        run: |
+          echo "Sanitizing SYNC_PATH: $SYNC_PATH"
+          SYNC_PATH=$(echo "$SYNC_PATH" | tr -d '\n' | xargs)  # Ensure no extra characters
+          MD_FILE=$(find "$SYNC_PATH" -name '*.md' | head -n 1)
+          
+          if [ -z "$MD_FILE" ]; then
+            echo "No Markdown file found in $SYNC_PATH"
+            exit 1
+          fi
+      
+          echo "Running step_1_format_md_and_convert_to_html_v3_0.sh with file: $MD_FILE"
+          chmod +x .github/scripts/step_1_format_md_and_convert_to_html_v3_0.sh
+          .github/scripts/step_1_format_md_and_convert_to_html_v3_0.sh "$MD_FILE" "$GIT_REPO_BASEDIR" "$SYNC_PATH" --md-format --md-to-html
+
+
+      # Step 8: Commit changes
+      - name: Commit changes
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SYNC_PATH: ${{ env.SYNC_PATH }}
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+
+          echo "Adding all changes within SYNC_PATH: $SYNC_PATH"
+          git add -A "$SYNC_PATH/"
+
+          # Check if there are any changes staged for commit
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            # Commit changes and push if there are any
+            COMMIT_MESSAGE="Formatted and converted Markdown to HTML, updated modification dates"
+            echo "Committing changes with message: '$COMMIT_MESSAGE'"
+            git commit -m "$COMMIT_MESSAGE"
+            git push
+          fi
+

@@ -1,0 +1,114 @@
+name: 2.0 - Convert HTML -> PDF
+
+on:
+  workflow_dispatch:
+    inputs:
+      sync_path:
+        description: |
+          Enter the path to the directory with the markdown file to convert to HTML.
+          Example: ndr/v1.0/psd01
+          Ensure the path is copied from GitHub and formatted correctly.
+        required: true
+        default: ndr/v1.0/psd01
+
+
+jobs:
+  convert-and-commit:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+      actions: write
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+
+    - name: Validate inputs
+      run: |
+        set -e
+        SYNC_PATH="${{ github.event.inputs.sync_path }}"
+
+        echo "SYNC_PATH=$SYNC_PATH" >> $GITHUB_ENV
+
+    - name: Set up Python
+      uses: actions/setup-python@v2
+      with:
+        python-version: '3.x'
+
+    - name: Install dependencies
+      run: |
+        set -e  # Exit immediately if a command exits with a non-zero status
+        echo "Installing dependencies"
+        cd .github/src
+        echo "Inside src directory: $(pwd)"
+        ls -ltra
+
+        # Create and activate virtual environment
+        python3 -m venv venv
+        source venv/bin/activate
+
+        # Upgrade pip and install Python dependencies
+        pip install --upgrade pip
+        pip install -r requirements.txt
+
+        # Update package lists
+        sudo apt-get update
+
+        # Install pandoc
+        sudo apt-get install -y pandoc
+
+        # Remove any existing wkhtmltopdf
+        sudo apt-get remove -y wkhtmltopdf || true
+
+        # Install dependencies required by wkhtmltopdf
+        sudo apt-get install -y xfonts-75dpi fonts-liberation fonts-dejavu
+
+
+      shell: bash
+      
+    - name: Install patched wkhtmltopdf
+      run: |
+        sudo apt-get update
+        sudo apt-get remove -y wkhtmltopdf
+        wget https://github.com/wkhtmltopdf/packaging/releases/download/0.12.6.1-2/wkhtmltox_0.12.6.1-2.jammy_amd64.deb
+        sudo apt-get install -y ./wkhtmltox_0.12.6.1-2.jammy_amd64.deb
+        wkhtmltopdf --version
+
+    - name: Convert HTML to PDF
+      env:
+        SYNC_PATH: ${{ env.SYNC_PATH }}
+        MODIFY_DATE: ${{ env.MODIFY_DATE }}
+      run: |
+        set -e  # Exit immediately if a command exits with a non-zero status
+        echo "Current directory: $(pwd)"
+        ls -ltra
+        chmod +x ./.github/scripts/step_2_convert_html_to_pdf_V2_0.sh
+        ./.github/scripts/step_2_convert_html_to_pdf_V2_0.sh "$SYNC_PATH"
+        echo "step_2_convert_html_to_pdf_V2_0.sh ran successfully"
+      shell: bash
+
+    - name: Commit PDF changes
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        set -e
+        # Configure Git with the GitHub Actions bot credentials
+        git config --global user.name 'github-actions[bot]'
+        git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+    
+        # Stage all changes at the root directory (including file deletions)
+        git add .
+    
+        # Unstage any changes that do NOT match .pdf/.PDF (case-insensitive)
+        for file in $(git diff --cached --name-only); do
+          if [[ ! "$file" =~ \.([pP][dD][fF])$ ]]; then
+              git reset HEAD "$file"
+          fi
+        done
+    
+        # Commit with a fixed message, even if there are no PDF changes
+        git commit --allow-empty -m "Generated PDF changes from HTML conversion"
+        git push
+      shell: bash
