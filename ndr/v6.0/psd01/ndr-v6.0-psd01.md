@@ -363,7 +363,7 @@ A message designer turns information requirements into a [message type](#def), t
 
 In NIEM terms, the package of data shared at runtime is a [message](#def). This data is arranged according to a supported serialization. The result is a sequence of bits that represents the information content of the message. [Example 3-2](#ex3-2) shows two messages representing the same information, one serialized in XML, the other in JSON. Each message in this example is a request for a quantity of some item. (In all examples, closing tags and brackets may be omitted, long lines may be truncated, and some portions omitted and/or replaced with ellipses (...).)
 
-```
+```text 
 <msg:Request                                                  | {
  xmlns:nc="https://docs.oasis-open.org/niemopen/ns/model/niem |   "@context": {
  xmlns:msg="http://example.com/ReqRes/1.0/">                  |     "nc": "https://docs.oasis-open.org/niemopen/ns/model/niem-
