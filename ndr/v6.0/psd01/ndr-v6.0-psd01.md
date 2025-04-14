@@ -8,9 +8,7 @@
 
 ## Project Specification 01
 
-## 27 January 2025 draft
-
-&nbsp;
+## 27 January 2025 
 
 #### This stage:
 https://docs.oasis-open.org/niemopen/ndr/v6.0/psd01/ndr-v6.0-ps01.html \
