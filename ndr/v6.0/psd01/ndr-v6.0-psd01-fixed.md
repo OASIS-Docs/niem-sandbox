@@ -1,27 +1,6 @@
-<link rel="stylesheet" href="https://docs.oasis-open.org/templates/css/markdown-styles-v1.7.3a.css" />
+![OASIS Logo](https://docs.oasis-open.org/templates/OASISLogo-v3.0.png)
 
-<div class="row">
-  <div class="column">
-    <img
-      src="https://docs.oasis-open.org/templates/OASIS-logo/2020/OASIS-Primary-Logo-Full-Colour.png"
-      alt="OASIS OP Logo" style="width:100%" />
-  </div>
-  <div class="column">
-    <img
-      src="https://github.com/niemopen/oasis-open-project/raw/main/artwork/NIEM-NO-Logo-v5.png"
-      alt="NIEMOpen Logo" style="width:65%" />
-  </div>
-</div>
-
-<!--
-If you want to check the line length in code blocks, uncomment this code block,
-set the width of your markdown preview window so that the following line does not wrap,
-and the terminal "X" is visible without the horizontal scrollbar:
-```
-.........1.........2.........3.........4.........5.........6.........7.........8.........9.........0.........1.........2.......X
-This is the width of a code block when the OASIS-formatted HTML is printed to PDF by Microsoft Edge with 0.4 inch margins
-```
--->
+## OASIS Committee Note
 
 -------
 
