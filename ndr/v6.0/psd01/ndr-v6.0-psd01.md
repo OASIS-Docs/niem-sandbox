@@ -438,7 +438,7 @@ Examle 2 - HTML embedded in markdowm
 ```
 ### XML vs JSON Message Example
 
-```text
+```code 
 [XML]                                                        | [JSON]
 <msg:Request                                                  | {
  xmlns:nc="https://docs.oasis-open.org/niemopen/ns/model/niem |   "@context": {
@@ -455,6 +455,24 @@ Examle 2 - HTML embedded in markdowm
                                                               | }
 ```
 
+```text 
+
+| **XML**                                                                 | **JSON**                                                                 |
+|-------------------------------------------------------------------------|--------------------------------------------------------------------------|
+| `<msg:Request                                                  `        | `{`                                                                      |
+| ` xmlns:nc="https://docs.oasis-open.org/niemopen/ns/model/niem`       | `  "@context": {`                                                       |
+| ` xmlns:msg="http://example.com/ReqRes/1.0/">`                         | `    "nc": "https://docs.oasis-open.org/niemopen/ns/model/niem-`        |
+| `  <msg:RequestID>RQ001</msg:RequestID>`                               | `    "msg": "http://example.com/ReqRes/1.0/"`                            |
+| `  <msg:RequestedItem>`                                                | `  },`                                                                   |
+| `    <nc:ItemName>Wrench</nc:ItemName>`                                | `  "msg:Request": {`                                                    |
+| `    <nc:ItemQuantity>10</nc:ItemQuantity>`                            | `    "msg:RequestID" : "RQ001",`                                        |
+| `  </msg:RequestedItem>`                                               | `    "msg:RequestedItem": {`                                            |
+| `</msg:Request>`                                                       | `      "nc:ItemName": "Wrench",`                                        |
+|                                                                         | `      "nc:ItemQuantity": 10`                                           |
+|                                                                         | `    }`                                                                  |
+|                                                                         | `  }`                                                                    |
+|                                                                         | `}`                                                                      |
+```
 
 <figcaption><a name="ex3-2">Example 3-2: Example of messages in XML and JSON syntax</a></figcaption>
 
