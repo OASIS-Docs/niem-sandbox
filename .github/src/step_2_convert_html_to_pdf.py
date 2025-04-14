@@ -11,6 +11,7 @@ from pathlib import Path
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Hardcoded stylesheet (upgraded for Mikey, 2025-04-14)
+# Added !important and a fallback to "Liberation Mono"
 INLINE_CSS = """
 <style>
 /* OASIS specification styles for HTML generated from Markdown or similar sources */
@@ -20,30 +21,30 @@ body {
     margin-left: 3pc;
     margin-right: 3pc;
     font-family: LiberationSans, Arial, Helvetica, sans-serif;
-    font-size:12pt;
-    line-height:1.2;
+    font-size: 12pt;
+    line-height: 1.2;
 }
 
 html {
     overflow-x: auto;
 }
 
-h1 { font-size:18pt; }
-h2 { font-size:14pt; }
-h3 { font-size:13pt; }
-h4 { font-size:12pt; }
-h5 { font-size:11pt; }
+h1 { font-size: 18pt; }
+h2 { font-size: 14pt; }
+h3 { font-size: 13pt; }
+h4 { font-size: 12pt; }
+h5 { font-size: 11pt; }
 h1big { font-size: 24pt; }
 h1, h2, h3, h4, h5, h1big {
     font-family: LiberationSans, Arial, Helvetica, sans-serif;
     font-weight: bold;
-    margin:8pt 0;
+    margin: 8pt 0;
     color: #446CAA;
 }
 
 /* style for gray "OASIS Committee Note" text */
 h1gray {
-    font-size:18pt;
+    font-size: 18pt;
     font-family: LiberationSans, Arial, Helvetica, sans-serif;
     font-weight: bold;
     color: #717171;
@@ -51,11 +52,11 @@ h1gray {
 
 /* style for h6, for use as Reference tag */
 h6 {
-    font-size:12pt; 
-    line-height:1.0;
+    font-size: 12pt;
+    line-height: 1.0;
     font-family: LiberationSans, Arial, Helvetica, sans-serif;
     font-weight: bold;
-    margin:0pt;
+    margin: 0pt;
 }
 
 /* Fix applied: Avoid page break before <hr> */
@@ -66,59 +67,59 @@ hr {
 /* Table styles - bordered with option for striped */
 table {
     border-collapse: collapse;
-    width:100%;
-    display:table;
-    font-size:12pt;
+    width: 100%;
+    display: table;
+    font-size: 12pt;
     margin-top: 6pt;
 }
 
 table, th, td {
     border: 1pt solid black;
-    padding:6pt 6pt;
-    text-align:left;
-    vertical-align:top;
+    padding: 6pt 6pt;
+    text-align: left;
+    vertical-align: top;
 }
 
 th {
-    color:#ffffff;
-    background-color:#1a8cff;
+    color: #ffffff;
+    background-color: #1a8cff;
 }
 
-/* --- Enhanced Code Block Styling --- */
+/* --- Enhanced Code Block Styling with !important --- */
 pre, code {
-    font-family: "Courier New", Courier, monospace;
-    font-size: 10.5pt;
-    background-color: #f4f4f4;
-    color: #111;
-    line-height: 1.4;
-    white-space: pre;
-    overflow-x: auto;
-    padding: 8pt 10pt;
-    margin: 8pt 0;
-    display: block;
-    border: 1pt solid #ccc;
-    border-radius: 3pt;
-    page-break-inside: avoid;
+    font-family: "Courier New", "Liberation Mono", Courier, monospace !important;
+    font-size: 10.5pt !important;
+    background-color: #f4f4f4 !important;
+    color: #111 !important;
+    line-height: 1.4 !important;
+    white-space: pre !important;
+    overflow-x: auto !important;
+    padding: 8pt 10pt !important;
+    margin: 8pt 0 !important;
+    display: block !important;
+    border: 1pt solid #ccc !important;
+    border-radius: 3pt !important;
+    page-break-inside: avoid !important;
 }
 
 /* Inline <code> in text (not inside <pre>) */
 code:not(pre code) {
-    display: inline;
-    padding: 1pt 2pt;
-    background-color: #eeeeee;
-    border-radius: 2pt;
-    border: 0.5pt solid #ccc;
-    font-size: 10pt;
-    white-space: nowrap;
+    display: inline !important;
+    padding: 1pt 2pt !important;
+    background-color: #eeeeee !important;
+    border-radius: 2pt !important;
+    border: 0.5pt solid #ccc !important;
+    font-size: 10pt !important;
+    white-space: nowrap !important;
 }
 
 /* Fix to avoid display corruption in PDF */
 pre {
-    word-wrap: normal;
-    white-space: pre;
+    word-wrap: normal !important;
+    white-space: pre !important;
 }
 
-/* offset block quote */
+/* Offset block quote */
 blockquote {
     border-left: 5px solid #ccc;
     padding-left: 10px;
@@ -137,19 +138,17 @@ class PDFGenerator:
         with open(html_path, 'r', encoding='utf-8') as f:
             html = f.read()
 
-        # Insert INLINE_CSS block before </head>
+        # Insert INLINE_CSS block before </head> if available, else after <head>, else prepend
         if '</head>' in html:
             html = html.replace('</head>', INLINE_CSS + "\n</head>")
         elif '<head>' in html:
             html = html.replace('<head>', '<head>\n' + INLINE_CSS)
         else:
-            # If no head tag is found, just prepend the CSS block
             html = INLINE_CSS + html
 
         temp_path = Path(html_path).with_name(f"{Path(html_path).stem}-inline.html")
         with open(temp_path, 'w', encoding='utf-8') as f:
             f.write(html)
-
         return str(temp_path)
 
     def generate_pdf(self):
@@ -164,6 +163,7 @@ class PDFGenerator:
 
             cli_command = [
                 'wkhtmltopdf',
+                '--debug-javascript',         # Added debug flag for troubleshooting fonts/resources
                 '--enable-local-file-access',
                 '--page-size', 'Letter',
                 '-T', '25', '-B', '20',
@@ -204,7 +204,7 @@ def main(html_file, date_str):
 
 if __name__ == '__main__':
     import argparse
-    parser = argparse.ArgumentParser(description='Convert HTML to PDF with inlined CSS')
+    parser = argparse.ArgumentParser(description='Convert HTML to PDF with inlined CSS and debug flag')
     parser.add_argument('html_file', type=str, help='The HTML file to convert')
     parser.add_argument('date_str', type=str, help='The date string in yyyy-mm-dd format')
     args = parser.parse_args()
