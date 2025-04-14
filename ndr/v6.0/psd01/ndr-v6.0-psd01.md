@@ -378,25 +378,44 @@ In NIEM terms, the package of data shared at runtime is a [message](#def). This 
                                                               |   }
                                                               | }
 ```
-Here you go, Mikey—your dual-format message example dropped clean into a two-column markdown table. Each format (XML and JSON) sits side-by-side for eyeballing and comparison. I’ve preserved all line breaks, spacing, and alignment for clarity.
+<table>
+  <tr>
+    <td>
 
-| **XML**                                                                 | **JSON**                                                                 |
-|-------------------------------------------------------------------------|--------------------------------------------------------------------------|
-| `<msg:Request                                                  `        | `{`                                                                      |
-| ` xmlns:nc="https://docs.oasis-open.org/niemopen/ns/model/niem`       | `  "@context": {`                                                       |
-| ` xmlns:msg="http://example.com/ReqRes/1.0/">`                         | `    "nc": "https://docs.oasis-open.org/niemopen/ns/model/niem-`        |
-| `  <msg:RequestID>RQ001</msg:RequestID>`                               | `    "msg": "http://example.com/ReqRes/1.0/"`                            |
-| `  <msg:RequestedItem>`                                                | `  },`                                                                   |
-| `    <nc:ItemName>Wrench</nc:ItemName>`                                | `  "msg:Request": {`                                                    |
-| `    <nc:ItemQuantity>10</nc:ItemQuantity>`                            | `    "msg:RequestID" : "RQ001",`                                        |
-| `  </msg:RequestedItem>`                                               | `    "msg:RequestedItem": {`                                            |
-| `</msg:Request>`                                                       | `      "nc:ItemName": "Wrench",`                                        |
-|                                                                         | `      "nc:ItemQuantity": 10`                                           |
-|                                                                         | `    }`                                                                  |
-|                                                                         | `  }`                                                                    |
-|                                                                         | `}`                                                                      |
+```xml
+<msg:Request
+ xmlns:nc="https://docs.oasis-open.org/niemopen/ns/model/niem"
+ xmlns:msg="http://example.com/ReqRes/1.0/">
+  <msg:RequestID>RQ001</msg:RequestID>
+  <msg:RequestedItem>
+    <nc:ItemName>Wrench</nc:ItemName>
+    <nc:ItemQuantity>10</nc:ItemQuantity>
+  </msg:RequestedItem>
+</msg:Request>
+```
 
-Let me know if you want a version that renders the actual table (e.g., for a Markdown viewer), or if you want HTML or LaTeX instead.
+    </td>
+    <td>
+
+```json
+{
+  "@context": {
+    "nc": "https://docs.oasis-open.org/niemopen/ns/model/niem-",
+    "msg": "http://example.com/ReqRes/1.0/"
+  },
+  "msg:Request": {
+    "msg:RequestID": "RQ001",
+    "msg:RequestedItem": {
+      "nc:ItemName": "Wrench",
+      "nc:ItemQuantity": 10
+    }
+  }
+}
+```
+
+    </td>
+  </tr>
+</table>
 
 <figcaption><a name="ex3-2">Example 3-2: Example of messages in XML and JSON syntax</a></figcaption>
 
