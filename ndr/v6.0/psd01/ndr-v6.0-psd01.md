@@ -1,14 +1,14 @@
-![OASIS Logo](https://docs.oasis-open.org/templates/OASISLogo-v3.0.png)
-
-## OASIS Committee Note
+<img src="http://docs.oasis-open.org/templates/OASISLogo-v3.0.png" alt="OASIS Logo" style="max-width: 200px; display: inline-block; page-break-after: avoid;" />
 
 ---
 
 # NIEM Naming and Design Rules (NDR) Version 6.0
 
-## Project Specification 01
+## Committee Specification Draft 01
 
 ## 27 January 2025
+
+&nbsp;
 
 #### This stage:
 
