@@ -1,10 +1,11 @@
-<img src="http://docs.oasis-open.org/templates/OASISLogo-v3.0.png" alt="OASIS Logo" style="max-width: 200px; display: inline-block; page-break-after: avoid;" />
+<img src="https://github.com/niemopen/oasis-open-project/raw/main/artwork/NIEM-NO-Logo-v5.png
+" alt="NIEM-Open Logo" style="max-width: 200px; display: inline-block; page-break-after: avoid;" />
 
 ---
 
 # NIEM Naming and Design Rules (NDR) Version 6.0
 
-## Committee Specification Draft 01
+## Project Specification Draft 01
 
 ## 27 January 2025
 
@@ -358,7 +359,7 @@ Data sharing in NIEM is implemented in terms of messages, message formats, and m
 
 A message designer turns information requirements into a [message type](#def), then turns a [message type](#def) into one or more [message formats](#def). Message developers then use the [message type](#def) and [message format](#def) to understand how to implement software that produces or consumes conforming messages.
 
-### 3.1.1 Messages
+c### 3.1.1 Messages
 
 In NIEM terms, the package of data shared at runtime is a [message](#def). This data is arranged according to a supported serialization. The result is a sequence of bits that represents the information content of the message. [Example 3-2](#ex3-2) shows two messages representing the same information, one serialized in XML, the other in JSON. Each message in this example is a request for a quantity of some item. (In all examples, closing tags and brackets may be omitted, long lines may be truncated, and some portions omitted and/or replaced with ellipses (...).)
 
@@ -377,6 +378,25 @@ In NIEM terms, the package of data shared at runtime is a [message](#def). This 
                                                               |   }
                                                               | }
 ```
+Here you go, Mikey—your dual-format message example dropped clean into a two-column markdown table. Each format (XML and JSON) sits side-by-side for eyeballing and comparison. I’ve preserved all line breaks, spacing, and alignment for clarity.
+
+| **XML**                                                                 | **JSON**                                                                 |
+|-------------------------------------------------------------------------|--------------------------------------------------------------------------|
+| `<msg:Request                                                  `        | `{`                                                                      |
+| ` xmlns:nc="https://docs.oasis-open.org/niemopen/ns/model/niem`       | `  "@context": {`                                                       |
+| ` xmlns:msg="http://example.com/ReqRes/1.0/">`                         | `    "nc": "https://docs.oasis-open.org/niemopen/ns/model/niem-`        |
+| `  <msg:RequestID>RQ001</msg:RequestID>`                               | `    "msg": "http://example.com/ReqRes/1.0/"`                            |
+| `  <msg:RequestedItem>`                                                | `  },`                                                                   |
+| `    <nc:ItemName>Wrench</nc:ItemName>`                                | `  "msg:Request": {`                                                    |
+| `    <nc:ItemQuantity>10</nc:ItemQuantity>`                            | `    "msg:RequestID" : "RQ001",`                                        |
+| `  </msg:RequestedItem>`                                               | `    "msg:RequestedItem": {`                                            |
+| `</msg:Request>`                                                       | `      "nc:ItemName": "Wrench",`                                        |
+|                                                                         | `      "nc:ItemQuantity": 10`                                           |
+|                                                                         | `    }`                                                                  |
+|                                                                         | `  }`                                                                    |
+|                                                                         | `}`                                                                      |
+
+Let me know if you want a version that renders the actual table (e.g., for a Markdown viewer), or if you want HTML or LaTeX instead.
 
 <figcaption><a name="ex3-2">Example 3-2: Example of messages in XML and JSON syntax</a></figcaption>
 
