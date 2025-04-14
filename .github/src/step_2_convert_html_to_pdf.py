@@ -5,9 +5,12 @@ import os
 import subprocess
 import logging
 from datetime import datetime
+from pathlib import Path
 
 # Initialize logging to print to console
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+OASIS_CSS_URL = 'https://docs.oasis-open.org/templates/css/markdown-styles-v1.7.3a.css'
 
 class PDFGenerator:
     def __init__(self, html_file, pdf_file, date_str):
@@ -15,12 +18,38 @@ class PDFGenerator:
         self.pdf_file = pdf_file
         self.date_str = date_str
 
+    def inject_css_inline(self, html_path):
+        import requests
+
+        logging.info("Injecting remote stylesheet into HTML as inline <style> block")
+        css_resp = requests.get(OASIS_CSS_URL)
+        css_resp.raise_for_status()
+        css_content = css_resp.text
+
+        with open(html_path, 'r', encoding='utf-8') as f:
+            html = f.read()
+
+        # Replace <link href=OASIS> with <style>...</style>
+        html = html.replace(
+            f'<link rel="stylesheet" href="{OASIS_CSS_URL}" />',
+            f'<style>\n{css_content}\n</style>'
+        )
+
+        temp_path = Path(html_path).with_name(f"{Path(html_path).stem}-inline.html")
+        with open(temp_path, 'w', encoding='utf-8') as f:
+            f.write(html)
+
+        return str(temp_path)
+
     def generate_pdf(self):
         try:
             # Parse the date string
             date_obj = datetime.strptime(self.date_str, '%Y-%m-%d')
             formatted_date = date_obj.strftime('%d %B %Y')
             year = date_obj.strftime('%Y')
+
+            # Inline CSS
+            processed_html = self.inject_css_inline(self.html_file)
 
             cli_command = [
                 'wkhtmltopdf',
@@ -38,7 +67,7 @@ class PDFGenerator:
                 '--footer-font-size', '8',
                 '--footer-font-name', 'LiberationSans',
                 '--no-outline',
-                self.html_file,
+                processed_html,
                 self.pdf_file
             ]
             logging.info('Generating PDF with command: %s', ' '.join(cli_command))
@@ -65,7 +94,7 @@ def main(html_file, date_str):
 
 if __name__ == '__main__':
     import argparse
-    parser = argparse.ArgumentParser(description='Convert HTML to PDF')
+    parser = argparse.ArgumentParser(description='Convert HTML to PDF with inlined CSS')
     parser.add_argument('html_file', type=str, help='The HTML file to convert')
     parser.add_argument('date_str', type=str, help='The date string in yyyy-mm-dd format')
     args = parser.parse_args()
