@@ -359,7 +359,7 @@ Data sharing in NIEM is implemented in terms of messages, message formats, and m
 
 A message designer turns information requirements into a [message type](#def), then turns a [message type](#def) into one or more [message formats](#def). Message developers then use the [message type](#def) and [message format](#def) to understand how to implement software that produces or consumes conforming messages.
 
-c### 3.1.1 Messages
+### 3.1.1 Messages
 
 In NIEM terms, the package of data shared at runtime is a [message](#def). This data is arranged according to a supported serialization. The result is a sequence of bits that represents the information content of the message. [Example 3-2](#ex3-2) shows two messages representing the same information, one serialized in XML, the other in JSON. Each message in this example is a request for a quantity of some item. (In all examples, closing tags and brackets may be omitted, long lines may be truncated, and some portions omitted and/or replaced with ellipses (...).)
 
@@ -377,6 +377,9 @@ In NIEM terms, the package of data shared at runtime is a [message](#def). This 
                                                               |      }
                                                               |   }
                                                               | }
+
+```
+Example 1 - Markdown with rows 
 ```
 | **XML**                                                   | **JSON**                                                              |
 |-----------------------------------------------------------|------------------------------------------------------------------------|
@@ -393,6 +396,48 @@ In NIEM terms, the package of data shared at runtime is a [message](#def). This 
 |                                                           | `    }`                                                               |
 |                                                           | `  }`                                                                 |
 |                                                           | `}`                                                                   |
+
+```
+
+Examle 2 - HTML embedded in markdowm 
+``` html
+
+<table style="border-collapse: collapse; width: 100%;">
+  <tr>
+    <td style="vertical-align: top; padding-right: 20px; border: none;">
+<pre><code>&lt;msg:Request
+ xmlns:nc="https://docs.oasis-open.org/niemopen/ns/model/niem"
+ xmlns:msg="http://example.com/ReqRes/1.0/"&gt;
+  &lt;msg:RequestID&gt;RQ001&lt;/msg:RequestID&gt;
+  &lt;msg:RequestedItem&gt;
+    &lt;nc:ItemName&gt;Wrench&lt;/nc:ItemName&gt;
+    &lt;nc:ItemQuantity&gt;10&lt;/nc:ItemQuantity&gt;
+  &lt;/msg:RequestedItem&gt;
+&lt;/msg:Request&gt;
+</code></pre>
+    </td>
+    <td style="vertical-align: top; border: none;">
+<pre><code>{
+  "@context": {
+    "nc": "https://docs.oasis-open.org/niemopen/ns/model/niem-",
+    "msg": "http://example.com/ReqRes/1.0/"
+  },
+  "msg:Request": {
+    "msg:RequestID": "RQ001",
+    "msg:RequestedItem": {
+      "nc:ItemName": "Wrench",
+      "nc:ItemQuantity": 10
+    }
+  }
+}
+</code></pre>
+    </td>
+  </tr>
+</table>
+
+```
+
+
 
 <figcaption><a name="ex3-2">Example 3-2: Example of messages in XML and JSON syntax</a></figcaption>
 
