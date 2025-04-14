@@ -6,11 +6,16 @@ on:
       sync_path:
         description: |
           Enter the path to the directory with the markdown file to convert to HTML.
-          Example: ndr/v1.0/psd01
+          Example: ap-hunt/v1.0/csd02
           Ensure the path is copied from GitHub and formatted correctly.
         required: true
-        default: ndr/v1.0/psd01
-
+        default: ndr/v6.0/psd01
+      modify_date:
+        description: |
+          Enter the modification date for the directory in yyyy-mm-dd format.
+          Example: 2025-01-27
+        required: true
+        default: 2025-01-27
 
 jobs:
   convert-and-commit:
@@ -24,13 +29,45 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v3
 
+    - name: Set up .sh files in .git_hooks
+      run: |
+        set -e
+        echo "Current directory: $(pwd)"
+        ls -ltra
+        cd .git
+        echo "Inside .git directory: $(pwd)"
+        ls -ltra
+        find .
+
+        if [ -d ".git_hooks" ]; then
+          echo "Making .sh files in .git_hooks executable"
+          find .git_hooks -name "*.sh" -exec chmod +x {} \;
+
+          echo "Running install_hooks.sh"
+          ./.git_hooks/install_hooks.sh
+          echo "install_hooks.sh ran successfully"
+
+          echo "Running restore_metadata.sh"
+          ./.git_hooks/restore_metadata.sh
+          echo "restore_metadata.sh ran successfully"
+        else
+          echo ".git_hooks directory not found. Skipping this step."
+        fi
 
     - name: Validate inputs
       run: |
         set -e
         SYNC_PATH="${{ github.event.inputs.sync_path }}"
+        MODIFY_DATE="${{ github.event.inputs.modify_date }}"
+
+        # Validate date format
+        if ! date -d "$MODIFY_DATE" '+%Y-%m-%d' >/dev/null 2>&1; then
+          echo "Invalid MODIFY_DATE format. Expected format: yyyy-mm-dd"
+          exit 1
+        fi
 
         echo "SYNC_PATH=$SYNC_PATH" >> $GITHUB_ENV
+        echo "MODIFY_DATE=$MODIFY_DATE" >> $GITHUB_ENV
 
     - name: Set up Python
       uses: actions/setup-python@v2
@@ -89,26 +126,56 @@ jobs:
         echo "step_2_convert_html_to_pdf_V2_0.sh ran successfully"
       shell: bash
 
-    - name: Commit PDF changes
+    - name: Update modification dates
+      env:
+        SYNC_PATH: ${{ env.SYNC_PATH }}
+        MODIFY_DATE: ${{ env.MODIFY_DATE }}
+      run: |
+        set -e  # Exit immediately if a command exits with a non-zero status
+        echo "Files for modification updates in $SYNC_PATH:"
+        find "$SYNC_PATH" -type f
+        echo "Updating modification date to $MODIFY_DATE 17:00:00 UTC"
+        # Update modification date for all files in the directory
+        find "$SYNC_PATH" -type f -exec touch -d "$MODIFY_DATE 17:00:00" {} +
+        # Update modification date for the directory itself
+        touch -d "$MODIFY_DATE 17:00:00" "$SYNC_PATH"
+        echo "Modification date updated successfully. Listing files with new modification dates:"
+        find "$SYNC_PATH" -type f -exec ls -lh {} +
+        echo "Directory modification date updated successfully. Listing directory:"
+        ls -ld "$SYNC_PATH"
+
+    - name: Commit changes
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        SYNC_PATH: ${{ env.SYNC_PATH }}
       run: |
-        set -e
+        set -e  # Exit immediately if a command exits with a non-zero status
         # Configure Git with the GitHub Actions bot credentials
         git config --global user.name 'github-actions[bot]'
         git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-    
-        # Stage all changes at the root directory (including file deletions)
+
+        # Stage all changes
         git add .
-    
-        # Unstage any changes that do NOT match .pdf/.PDF (case-insensitive)
-        for file in $(git diff --cached --name-only); do
-          if [[ ! "$file" =~ \.([pP][dD][fF])$ ]]; then
-              git reset HEAD "$file"
+
+        # Check if there are any changes to commit
+        if ! git diff --cached --quiet; then
+          # Find the Markdown file
+          MD_FILE=$(find "$SYNC_PATH" -name '*.md' | head -n 1)
+
+          if [ -z "$MD_FILE" ]; then
+            echo "Markdown file not found in $SYNC_PATH. Skipping commit."
+            exit 0
           fi
-        done
-    
-        # Commit with a fixed message, even if there are no PDF changes
-        git commit --allow-empty -m "Generated PDF changes from HTML conversion"
-        git push
+
+          # Extract the base name of the Markdown file
+          MD_FILENAME=$(basename "$MD_FILE" .md)
+
+          # Commit the changes with a descriptive message
+          git commit -m "Generated $MD_FILENAME HTML and PDF"
+
+          # Push the changes to the repository
+          git push
+        else
+          echo "No changes to commit."
+        fi
       shell: bash
