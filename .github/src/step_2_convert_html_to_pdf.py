@@ -17,8 +17,8 @@ RAW_INLINE_CSS = """
 /* OASIS specification styles for HTML generated from Markdown or similar sources */
 
 body {
-    margin-left: 3pc;
-    margin-right: 3pc;
+    margin-left: 0.5cm;
+    margin-right: 0.5cm;
     font-family: LiberationSans, Arial, Helvetica, sans-serif;
     font-size: 12pt;
     line-height: 1.2;
@@ -89,7 +89,8 @@ pre, code {
     font-family: "Courier New", "Liberation Mono", Courier, monospace !important;
     font-size: 10pt !important;
     line-height: 1.4 !important;
-    white-space: pre !important;
+    background-color: #f4f4f4 !important;
+    color: #111 !important;
     overflow-x: auto !important;
     display: block !important;
     box-sizing: border-box !important;
@@ -119,10 +120,10 @@ code:not(pre code) {
     white-space: nowrap !important;
 }
 
-/* Fix to avoid display corruption in PDF */
+/* Fix to ensure wrapping in code blocks for PDF compatibility */
 pre {
-    word-wrap: normal !important;
-    white-space: pre !important;
+    white-space: pre-wrap !important;
+    word-break: break-word !important;
 }
 
 /* Offset block quote */
@@ -188,7 +189,7 @@ class PDFGenerator:
 
             cli_command = [
                 'wkhtmltopdf',
-                '--debug-javascript',         # Debug flag for troubleshooting JavaScript and font/resource loading.
+                '--debug-javascript',
                 '--enable-local-file-access',
                 '--page-size', 'Letter',
                 '-T', '25', '-B', '20',
