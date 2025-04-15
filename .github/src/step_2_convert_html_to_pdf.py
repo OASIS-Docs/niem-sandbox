@@ -88,8 +88,8 @@ th {
 pre, code {
     font-family: "Consolas", "Courier New", "Liberation Mono", monospace !important;
     font-size: 8pt !important;
-    line-height: 1.2 !important;
-    background-color: #f4f4f4 !important;
+    line-height: 1.4 !important;
+    background-color: #eeeeee !important;
     color: #111 !important;
     white-space: pre !important;
     overflow-x: auto !important;
