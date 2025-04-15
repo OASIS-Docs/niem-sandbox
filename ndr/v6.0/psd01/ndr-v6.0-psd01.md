@@ -2467,7 +2467,7 @@ _:n3 nc:PersonFullName "Clark Kent" .
 
 These use `structures:uri` in NIEM 6. Need explanation and example TODO
 
-## 5.6 Representation pattern 
+## 5.6 Representation pattern
 
 Stuff from NDR 5 section 10.7 TODO
 
@@ -4390,4 +4390,3 @@ code { font-size: 11pt; }
 pre > code { font-size: 9pt; margin-left:auto; margin-right:auto; }
 table { margin-bottom: 12pt; }
 </style>
-
