@@ -6,8 +6,9 @@ on:
       sync_path:
         description: |
           Path to the directory with the markdown file to convert to HTML.
-          Example: ndr/v1.0/psd01
+          Example: ndr/v6.0/psd01
           Ensure the path is copied from GitHub and formatted correctly.
+        default: ndr/v6.0/psd01
         required: true
 
 jobs:
