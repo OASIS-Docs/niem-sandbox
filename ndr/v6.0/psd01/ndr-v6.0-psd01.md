@@ -1,5 +1,6 @@
-<img src="https://github.com/niemopen/oasis-open-project/raw/main/artwork/NIEM-NO-Logo-v5.png
-" alt="Oasis Logo" style="max-width: 200px; display: inline-block; page-break-after: avoid;" />
+
+
+<img src="https://github.com/niemopen/oasis-open-project/raw/main/artwork/NIEM-NO-Logo-v5.png" alt="NIEM Logo" style="max-width: 200px; display: inline-block; page-break-after: avoid;"/>
 
 ---
 
@@ -2461,19 +2462,19 @@ _:n3 nc:PersonFullName "Clark Kent" .
   <img src="images/relProp.png" style="zoom: 100%;" />
 <figcaption><a name="fig5-22">Figure 5-22: RDF-star graph diagram for a relationship property</a></figcaption>
 </figure>
-```
+
 
 ## 5.6 Roles
 
-These use `structures:uri` in NIEM 6. Need explanation and example TODO
+> These use `structures:uri` in NIEM 6. Need explanation and example TODO
 
 ## 5.6 Representation pattern
 
-Stuff from NDR 5 section 10.7 TODO
+> Stuff from NDR 5 section 10.7 TODO
 
 ## 5.7 Container objects
 
-NDR 5 section 10.6 TODO
+> NDR 5 section 10.6 TODO
 
 ---
 
