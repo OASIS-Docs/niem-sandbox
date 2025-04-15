@@ -5,11 +5,13 @@
 <meta charset="utf-8"/>
 <meta content="pandoc" name="generator"/>
 <meta content="width=device-width, initial-scale=1.0, user-scalable=yes" name="viewport"/>
-<body>
-  <img 
-    src="https://github.com/niemopen/oasis-open-project/raw/main/artwork/NIEM-NO-Logo-v5.png" 
-    alt="OASIS Logo"
-    style="width: 200px; display: block; margin: 0;" />
+<title>NIEM Naming and Design Rules (NDR) Version 6.0</title>
+
+<link href="/home/runner/work/niem-sandbox/niem-sandbox/ndr/v6.0/psd01/styles/markdown-styles-v1.8.1-cn_final.css" rel="stylesheet"/>
+<link href="styles/markdown-styles-v1.8.1-cn_final.css" rel="stylesheet"/></head>
+<body><img alt="OASIS Logo" src="https://docs.oasis-open.org/templates/OASISLogo-v3.0.png"/>
+<header id="title-block-header">
+<h1 class="title">NIEM Naming and Design Rules (NDR) Version 6.0</h1>
 </header>
 <p></p>
 <hr/>
@@ -1059,7 +1061,7 @@ XML, the other in JSON. Each message in this example is a request for a
 quantity of some item. (In all examples, closing tags and brackets may
 be omitted, long lines may be truncated, and some portions omitted
 and/or replaced with ellipses (…).)</p>
-<pre><code>&lt;msg:Request                                                  | {
+<pre class="text">&lt;msg:Request                                                  | {
  xmlns:nc="<a href="https://docs.oasis-open.org/niemopen/ns/model/niem">https://docs.oasis-open.org/niemopen/ns/model/niem</a> |   "@context": {
  xmlns:msg="<a href='http://example.com/ReqRes/1.0/"&gt;'>http://example.com/ReqRes/1.0/"&gt;</a>                  |     "nc": "<a href="https://docs.oasis-open.org/niemopen/ns/model/niem-">https://docs.oasis-open.org/niemopen/ns/model/niem-</a>
   &lt;msg:RequestID&gt;RQ001&lt;/msg:RequestID&gt;                        |     "msg": "<a href='http://example.com/ReqRes/1.0/"'>http://example.com/ReqRes/1.0/"</a>
@@ -1071,9 +1073,91 @@ and/or replaced with ellipses (…).)</p>
                                                               |       "nc:ItemQuantity": 10
                                                               |      }
                                                               |   }
-                                                              | }                                                                      | `}`                                                                      
-                                                              |
-</code></pre>
+                                                              | }
+<code></code></pre>
+<p>Example 1 - Markdown with rows</p>
+<pre>| **XML**                                                   | **JSON**                                                              |
+|-----------------------------------------------------------|------------------------------------------------------------------------|
+| `&lt;msg:Request`                                            | `{`                                                                    |
+| ` xmlns:nc="<a href='https://docs.oasis-open.org/niemopen/ns/model/niem"`'>https://docs.oasis-open.org/niemopen/ns/model/niem"`</a> | `  "@context": {`                                             |
+| ` xmlns:msg="<a href='http://example.com/ReqRes/1.0/"&gt;`'>http://example.com/ReqRes/1.0/"&gt;`</a>            | `    "nc": "<a href='https://docs.oasis-open.org/niemopen/ns/model/niem-"`'>https://docs.oasis-open.org/niemopen/ns/model/niem-"`</a>     |
+| `  &lt;msg:RequestID&gt;RQ001&lt;/msg:RequestID&gt;`                  | `    "msg": "<a href='http://example.com/ReqRes/1.0/"`'>http://example.com/ReqRes/1.0/"`</a>                          |
+| `  &lt;msg:RequestedItem&gt;`                                   | `  },`                                                                 |
+| `    &lt;nc:ItemName&gt;Wrench&lt;/nc:ItemName&gt;`                   | `  "msg:Request": {`                                                  |
+| `    &lt;nc:ItemQuantity&gt;10&lt;/nc:ItemQuantity&gt;`               | `    "msg:RequestID" : "RQ001",`                                      |
+| `  &lt;/msg:RequestedItem&gt;`                                  | `    "msg:RequestedItem": {`                                          |
+| `&lt;/msg:Request&gt;`                                          | `      "nc:ItemName": "Wrench",`                                      |
+|                                                           | `      "nc:ItemQuantity": 10`                                         |
+|                                                           | `    }`                                                               |
+|                                                           | `  }`                                                                 |
+|                                                           | `}`                                                                   |
+<code></code></pre>
+<p>Examle 2 - HTML embedded in markdowm</p>
+<pre>
+&lt;table style="border-collapse: collapse; width: 100%;"&gt;
+  &lt;tr&gt;
+    &lt;td style="vertical-align: top; padding-right: 20px; border: none;"&gt;
+&lt;pre&gt;&lt;code&gt;&amp;lt;msg:Request
+ xmlns:nc="<a href='https://docs.oasis-open.org/niemopen/ns/model/niem"'>https://docs.oasis-open.org/niemopen/ns/model/niem"</a>
+ xmlns:msg="<a href='http://example.com/ReqRes/1.0/"&amp;gt;'>http://example.com/ReqRes/1.0/"&amp;gt;</a>
+  &amp;lt;msg:RequestID&amp;gt;RQ001&amp;lt;/msg:RequestID&amp;gt;
+  &amp;lt;msg:RequestedItem&amp;gt;
+    &amp;lt;nc:ItemName&amp;gt;Wrench&amp;lt;/nc:ItemName&amp;gt;
+    &amp;lt;nc:ItemQuantity&amp;gt;10&amp;lt;/nc:ItemQuantity&amp;gt;
+  &amp;lt;/msg:RequestedItem&amp;gt;
+&amp;lt;/msg:Request&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+    &lt;/td&gt;
+    &lt;td style="vertical-align: top; border: none;"&gt;
+&lt;pre&gt;&lt;code&gt;{
+  "@context": {
+    "nc": "<a href='https://docs.oasis-open.org/niemopen/ns/model/niem-",'>https://docs.oasis-open.org/niemopen/ns/model/niem-",</a>
+    "msg": "<a href='http://example.com/ReqRes/1.0/"'>http://example.com/ReqRes/1.0/"</a>
+  },
+  "msg:Request": {
+    "msg:RequestID": "RQ001",
+    "msg:RequestedItem": {
+      "nc:ItemName": "Wrench",
+      "nc:ItemQuantity": 10
+    }
+  }
+}
+&lt;/code&gt;&lt;/pre&gt;
+    &lt;/td&gt;
+  &lt;/tr&gt;
+&lt;/table&gt;
+<code></code></pre>
+<h3 id="xml-vs-json-message-example">XML vs JSON Message Example</h3>
+<pre class="code">[XML]                                                        | [JSON]
+&lt;msg:Request                                                  | {
+ xmlns:nc="<a href="https://docs.oasis-open.org/niemopen/ns/model/niem">https://docs.oasis-open.org/niemopen/ns/model/niem</a> |   "@context": {
+ xmlns:msg="<a href='http://example.com/ReqRes/1.0/"&gt;'>http://example.com/ReqRes/1.0/"&gt;</a>                  |     "nc": "<a href="https://docs.oasis-open.org/niemopen/ns/model/niem-">https://docs.oasis-open.org/niemopen/ns/model/niem-</a>
+  &lt;msg:RequestID&gt;RQ001&lt;/msg:RequestID&gt;                        |     "msg": "<a href='http://example.com/ReqRes/1.0/"'>http://example.com/ReqRes/1.0/"</a>
+  &lt;msg:RequestedItem&gt;                                         |   },
+    &lt;nc:ItemName&gt;Wrench&lt;/nc:ItemName&gt;                         |   "msg:Request": {
+    &lt;nc:ItemQuantity&gt;10&lt;/nc:ItemQuantity&gt;                     |     "msg:RequestID" : "RQ001",
+  &lt;/msg:RequestedItem&gt;                                        |     "msg:RequestedItem": {
+&lt;/msg:Request&gt;                                                |       "nc:ItemName": "Wrench",
+                                                              |       "nc:ItemQuantity": 10
+                                                              |     }
+                                                              |   }
+                                                              | }<code></code></pre>
+<pre class="text">
+| **XML**                                                                 | **JSON**                                                                 |
+|-------------------------------------------------------------------------|--------------------------------------------------------------------------|
+| `&lt;msg:Request                                                  `        | `{`                                                                      |
+| ` xmlns:nc="<a href="https://docs.oasis-open.org/niemopen/ns/model/niem`">https://docs.oasis-open.org/niemopen/ns/model/niem`</a>       | `  "@context": {`                                                       |
+| ` xmlns:msg="<a href='http://example.com/ReqRes/1.0/"&gt;`'>http://example.com/ReqRes/1.0/"&gt;`</a>                         | `    "nc": "<a href="https://docs.oasis-open.org/niemopen/ns/model/niem-`">https://docs.oasis-open.org/niemopen/ns/model/niem-`</a>        |
+| `  &lt;msg:RequestID&gt;RQ001&lt;/msg:RequestID&gt;`                               | `    "msg": "<a href='http://example.com/ReqRes/1.0/"`'>http://example.com/ReqRes/1.0/"`</a>                            |
+| `  &lt;msg:RequestedItem&gt;`                                                | `  },`                                                                   |
+| `    &lt;nc:ItemName&gt;Wrench&lt;/nc:ItemName&gt;`                                | `  "msg:Request": {`                                                    |
+| `    &lt;nc:ItemQuantity&gt;10&lt;/nc:ItemQuantity&gt;`                            | `    "msg:RequestID" : "RQ001",`                                        |
+| `  &lt;/msg:RequestedItem&gt;`                                               | `    "msg:RequestedItem": {`                                            |
+| `&lt;/msg:Request&gt;`                                                       | `      "nc:ItemName": "Wrench",`                                        |
+|                                                                         | `      "nc:ItemQuantity": 10`                                           |
+|                                                                         | `    }`                                                                  |
+|                                                                         | `  }`                                                                    |
+|                                                                         | `}`                                                                      |<code></code></pre>
 <figcaption>
 <a name="ex3-2">Example 3-2: Example of messages in XML and JSON
 syntax</a>
