@@ -1,5 +1,5 @@
 <img src="https://github.com/niemopen/oasis-open-project/raw/main/artwork/NIEM-NO-Logo-v5.png
-" alt="NIEM-Open Logo" style="max-width: 200px; display: inline-block; page-break-after: avoid;" />
+" alt="Oasis Logo" style="max-width: 200px; display: inline-block; page-break-after: avoid;" />
 
 ---
 
@@ -13,8 +13,8 @@
 
 #### This stage:
 
-https://docs.oasis-open.org/niemopen/ndr/v6.0/psd01/ndr-v6.0-ps01.html \
-https://docs.oasis-open.org/niemopen/ndr/v6.0/psd01/ndr-v6.0-ps01.pdf (Authoritative)
+https://docs.oasis-open.org/niemopen/ndr/v6.0/psd01/ndr-v6.0-psd01.html \
+https://docs.oasis-open.org/niemopen/ndr/v6.0/psd01/ndr-v6.0-psd01.pdf (Authoritative)
 
 #### Previous stage:
 
@@ -2465,15 +2465,15 @@ _:n3 nc:PersonFullName "Clark Kent" .
 
 ## 5.6 Roles
 
-> These use `structures:uri` in NIEM 6. Need explanation and example TODO
+These use `structures:uri` in NIEM 6. Need explanation and example TODO
 
-## 5.6 Representation pattern
+## 5.6 Representation pattern 
 
-> Stuff from NDR 5 section 10.7 TODO
+Stuff from NDR 5 section 10.7 TODO
 
 ## 5.7 Container objects
 
-> NDR 5 section 10.6 TODO
+NDR 5 section 10.6 TODO
 
 ---
 
@@ -4390,3 +4390,4 @@ code { font-size: 11pt; }
 pre > code { font-size: 9pt; margin-left:auto; margin-right:auto; }
 table { margin-bottom: 12pt; }
 </style>
+
