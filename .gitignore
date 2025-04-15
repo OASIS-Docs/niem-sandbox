@@ -1,4 +1,5 @@
 .DS_Store
 *.DS_*
 *.DS_Store
-
+*.deb
+*.deb.*

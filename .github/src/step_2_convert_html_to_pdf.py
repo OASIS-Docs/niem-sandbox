@@ -2,6 +2,7 @@
 
 import sys
 import os
+import re
 import subprocess
 import logging
 from datetime import datetime
@@ -10,8 +11,8 @@ from pathlib import Path
 # Initialize logging to print to console
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# Added !important and a fallback to "Liberation Mono"
-INLINE_CSS = """
+# Hardcoded stylesheet (upgraded for Mikey, 2025-04-14) with our expanded width and responsive font settings.
+RAW_INLINE_CSS = """
 <style>
 /* OASIS specification styles for HTML generated from Markdown or similar sources */
 
@@ -86,18 +87,25 @@ th {
 /* --- Enhanced Code Block Styling with !important --- */
 pre, code {
     font-family: "Courier New", "Liberation Mono", Courier, monospace !important;
-    font-size: 10.0pt !important;
-    background-color: #f4f4f4 !important;
-    color: #111 !important;
+    font-size: 10pt !important;
     line-height: 1.4 !important;
     white-space: pre !important;
     overflow-x: auto !important;
+    display: block !important;
+    box-sizing: border-box !important;
     padding: 8pt 10pt !important;
     margin: 8pt 0 !important;
-    display: block !important;
     border: 1pt solid #ccc !important;
     border-radius: 3pt !important;
     page-break-inside: avoid !important;
+    width: 100% !important;
+    max-width: 100vw !important;
+}
+
+/* Responsive font size logic for pre elements */
+pre {
+    font-size: clamp(8pt, 1.2vw, 10pt) !important;
+    max-width: calc(100vw - 2cm) !important; /* Keeps a 2cm cushion from the page edge */
 }
 
 /* Inline <code> in text (not inside <pre>) */
@@ -125,6 +133,12 @@ blockquote {
 </style>
 """
 
+# Define markers for our injected CSS block.
+INLINE_CSS_MARKER_BEGIN = "<!-- BEGIN INLINE CSS -->"
+INLINE_CSS_MARKER_END = "<!-- END INLINE CSS -->"
+# Build the full block to inject.
+INLINE_CSS_BLOCK = INLINE_CSS_MARKER_BEGIN + "\n" + RAW_INLINE_CSS + "\n" + INLINE_CSS_MARKER_END
+
 class PDFGenerator:
     def __init__(self, html_file, pdf_file, date_str):
         self.html_file = html_file
@@ -132,36 +146,49 @@ class PDFGenerator:
         self.date_str = date_str
 
     def inject_css_inline(self, html_path):
-        logging.info("Injecting hardcoded CSS into HTML as inline <style> block")
+        logging.info("Injecting hardcoded CSS into HTML as an inline <style> block")
         with open(html_path, 'r', encoding='utf-8') as f:
             html = f.read()
 
-        # Insert INLINE_CSS block before </head> if available, else after <head>, else prepend
-        if '</head>' in html:
-            html = html.replace('</head>', INLINE_CSS + "\n</head>")
-        elif '<head>' in html:
-            html = html.replace('<head>', '<head>\n' + INLINE_CSS)
-        else:
-            html = INLINE_CSS + html
+        # Remove any previously injected CSS marked with our unique markers.
+        html = re.sub(r'<!-- BEGIN INLINE CSS -->.*?<!-- END INLINE CSS -->', '', html, flags=re.DOTALL)
 
-        temp_path = Path(html_path).with_name(f"{Path(html_path).stem}-inline.html")
-        with open(temp_path, 'w', encoding='utf-8') as f:
+        # Insert the new INLINE_CSS_BLOCK. Preferably before the closing </head> tag.
+        if '</head>' in html:
+            html = html.replace('</head>', INLINE_CSS_BLOCK + "\n</head>")
+        elif '<head>' in html:
+            html = html.replace('<head>', '<head>\n' + INLINE_CSS_BLOCK)
+        else:
+            # If no <head> tag exists, prepend it.
+            html = INLINE_CSS_BLOCK + html
+
+        # Determine the output path.
+        # If the current file name already contains '-inline', overwrite in place.
+        input_path = Path(html_path)
+        if "-inline" in input_path.stem:
+            out_path = input_path
+        else:
+            out_path = input_path.with_name(f"{input_path.stem}-inline{input_path.suffix}")
+
+        with open(out_path, 'w', encoding='utf-8') as f:
             f.write(html)
-        return str(temp_path)
+
+        logging.info("Injected CSS saved to: %s", str(out_path))
+        return str(out_path)
 
     def generate_pdf(self):
         try:
-            # Parse the date string
+            # Parse the date string.
             date_obj = datetime.strptime(self.date_str, '%Y-%m-%d')
             formatted_date = date_obj.strftime('%d %B %Y')
             year = date_obj.strftime('%Y')
 
-            # Process HTML to inject inline CSS
+            # Process HTML to inject inline CSS.
             processed_html = self.inject_css_inline(self.html_file)
 
             cli_command = [
                 'wkhtmltopdf',
-                '--debug-javascript',         # Added debug flag for troubleshooting fonts/resources
+                '--debug-javascript',         # Debug flag for troubleshooting JavaScript and font/resource loading.
                 '--enable-local-file-access',
                 '--page-size', 'Letter',
                 '-T', '25', '-B', '20',
@@ -202,7 +229,7 @@ def main(html_file, date_str):
 
 if __name__ == '__main__':
     import argparse
-    parser = argparse.ArgumentParser(description='Convert HTML to PDF with inlined CSS and debug flag')
+    parser = argparse.ArgumentParser(description='Convert HTML to PDF with inlined CSS, ensuring no duplicate inline blocks')
     parser.add_argument('html_file', type=str, help='The HTML file to convert')
     parser.add_argument('date_str', type=str, help='The date string in yyyy-mm-dd format')
     args = parser.parse_args()
