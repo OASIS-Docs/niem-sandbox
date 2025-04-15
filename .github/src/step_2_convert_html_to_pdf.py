@@ -11,7 +11,7 @@ from pathlib import Path
 # Initialize logging to print to console
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# Hardcoded stylesheet (upgraded for Mikey, 2025-04-14) with our expanded width and responsive font settings.
+# Hardcoded stylesheet (upgraded for Mikey, 2025-04-14) with narrow fonts and minimal styling for code blocks.
 RAW_INLINE_CSS = """
 <style>
 /* OASIS specification styles for HTML generated from Markdown or similar sources */
@@ -84,29 +84,24 @@ th {
     background-color: #1a8cff;
 }
 
-/* --- Enhanced Code Block Styling with !important --- */
+/* --- Enhanced Code Block Styling: No wrapping, narrow font, minimal styling --- */
 pre, code {
-    font-family: "Courier New", "Liberation Mono", Courier, monospace !important;
-    font-size: 10pt !important;
-    line-height: 1.4 !important;
+    font-family: "Consolas", "Courier New", "Liberation Mono", monospace !important;
+    font-size: 7pt !important;
+    line-height: 1.2 !important;
     background-color: #f4f4f4 !important;
     color: #111 !important;
+    white-space: pre !important;
     overflow-x: auto !important;
     display: block !important;
     box-sizing: border-box !important;
-    padding: 8pt 10pt !important;
-    margin: 8pt 0 !important;
-    border: 1pt solid #ccc !important;
-    border-radius: 3pt !important;
+    padding: 4pt !important;
+    margin: 4pt 0 !important;
+    border: 0.5pt solid #ccc !important;
+    border-radius: 1pt !important;
     page-break-inside: avoid !important;
     width: 100% !important;
     max-width: 100vw !important;
-}
-
-/* Responsive font size logic for pre elements */
-pre {
-    font-size: clamp(8pt, 1.2vw, 10pt) !important;
-    max-width: calc(100vw - 2cm) !important; /* Keeps a 2cm cushion from the page edge */
 }
 
 /* Inline <code> in text (not inside <pre>) */
@@ -116,14 +111,8 @@ code:not(pre code) {
     background-color: #eeeeee !important;
     border-radius: 2pt !important;
     border: 0.5pt solid #ccc !important;
-    font-size: 10pt !important;
+    font-size: 7pt !important;
     white-space: nowrap !important;
-}
-
-/* Fix to ensure wrapping in code blocks for PDF compatibility */
-pre {
-    white-space: pre-wrap !important;
-    word-break: break-word !important;
 }
 
 /* Offset block quote */
