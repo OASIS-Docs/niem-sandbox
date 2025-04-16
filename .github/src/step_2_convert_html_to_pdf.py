@@ -84,35 +84,43 @@ th {
     background-color: #1a8cff;
 }
 
-pre, pre code {
-    font-family: "Source Code Pro", "Liberation Mono", monospace !important;
-    font-size: 9pt !important;
-    line-height: 1.4 !important;
-    background-color: #eeeeee !important;
-    color: #111 !important;
-    white-space: pre !important;
-    overflow-x: auto !important;
-    display: block !important;
-    box-sizing: border !important;
-    padding: 4pt !important;
-    margin: 4pt 0 !important;
-    border: 0.5pt solid #ccc !important;
-    border-radius: 1pt !important;
-    page-break-inside: avoid !important;
-    width: 100% !important;
-    max-width: 100vw !important;
+pre {
+    font-family: "Source Code Pro", "Liberation Mono", monospace;
+    font-size: 8pt;
+    line-height: 1.4;
+    background-color: #eeeeee;
+    color: #111;
+    white-space: pre;
+    overflow-x: auto;
+    box-sizing: border-box;
+    padding: 8px;
+    margin: 8px 0;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    page-break-inside: avoid;
+    width: 100%;
+    max-width: 100vw;
+}
+
+pre code {
+    font-family: inherit;
+    font-size: inherit;
+    background: none;
+    padding: 0;
+    border: none;
+    color: inherit;
+    white-space: inherit;
 }
 
 code:not(pre code) {
-    font-family: "Source Code Pro", "Liberation Mono", monospace !important;
-    font-size: 10pt !important;
-    background-color: #eeeeee !important;
-    color: #111 !important;
-    border: 0.5pt solid #ccc !important;
-    border-radius: 2pt !important;
-    padding: 1pt 2pt !important;
-    white-space: nowrap !important;
-    display: inline !important;
+    font-family: "Source Code Pro", "Liberation Mono", monospace;
+    font-size: 10pt;
+    background-color: #eeeeee;
+    color: #111;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+    padding: 2px 4px;
+    white-space: nowrap;
 }
 /* Offset block quote */
 blockquote {
