@@ -86,7 +86,7 @@ th {
 
 /* --- Enhanced Code Block Styling: No wrapping, narrow font, minimal styling --- */
 pre, code {
-    font-family: "Consolas", "Courier New", "Liberation Mono", monospace !important;
+    font-family: "Source Code Pro","Liberation Mono", monospace !important;
     font-size: 8pt !important;
     line-height: 1.4 !important;
     background-color: #eeeeee !important;
@@ -111,7 +111,7 @@ code:not(pre code) {
     background-color: #eeeeee !important;
     border-radius: 2pt !important;
     border: 0.5pt solid #ccc !important;
-    font-size: 8pt !important;
+    font-size: 10pt !important;
     white-space: nowrap !important;
 }
 
