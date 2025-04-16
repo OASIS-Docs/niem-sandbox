@@ -87,7 +87,7 @@ th {
 /* Inline Code */
 code {
   font-family: "Source Code Pro", "Liberation Mono", monospace;
-  font-size: 10pt;
+  font-size: 9pt;
   background-color: #eeeeee;
   color: #111;
   border: 1px solid #ccc;
@@ -117,19 +117,20 @@ pre {
 /* remove ALL layout from nested code */
 pre code {
   font-family: inherit;
-  font-size: inherit;
+  font-size: 8pt;
   line-height: inherit;
-  background: none;
+  background: inherit;
+  overflow-x: auto;
   color: inherit;
   white-space: inherit;
   padding: 0;
   margin: 0;
   border: none;
-  width: auto;
-  max-width: none;
+  width: 100%;
+  max-width: 100vw;
   display: block;
 }
-}
+
 /* Offset block quote */
 blockquote {
     border-left: 5px solid #ccc;
