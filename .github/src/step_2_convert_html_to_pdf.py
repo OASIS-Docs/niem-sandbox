@@ -85,7 +85,7 @@ th {
 }
 
 /* --- Enhanced Code Block Styling: No wrapping, narrow font, minimal styling --- */
-pre, code {
+pre {
     font-family: "Source Code Pro","Liberation Mono", monospace !important;
     font-size: 8pt !important;
     line-height: 1.4 !important;
@@ -104,17 +104,17 @@ pre, code {
     max-width: 100vw !important;
 }
 
-/* Inline <code> in text (not inside <pre>) */
-code:not(pre code) {
-    display: inline !important;
-    padding: 1pt 2pt !important;
-    background-color: #eeeeee !important;
-    border-radius: 2pt !important;
-    border: 0.5pt solid #ccc !important;
+code {
+    font-family: "Source Code Pro","Liberation Mono", monospace !important;
     font-size: 10pt !important;
+    background-color: #eeeeee !important;
+    color: #111 !important;
+    border: 0.5pt solid #ccc !important;
+    border-radius: 2pt !important;
+    padding: 1pt 2pt !important;
     white-space: nowrap !important;
+    display: inline !important;
 }
-
 /* Offset block quote */
 blockquote {
     border-left: 5px solid #ccc;
