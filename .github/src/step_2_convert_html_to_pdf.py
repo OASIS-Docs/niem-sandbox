@@ -84,17 +84,16 @@ th {
     background-color: #1a8cff;
 }
 
-/* --- Enhanced Code Block Styling: No wrapping, narrow font, minimal styling --- */
-pre {
-    font-family: "Source Code Pro","Liberation Mono", monospace !important;
-    font-size: 8pt !important;
+pre, pre code {
+    font-family: "Source Code Pro", "Liberation Mono", monospace !important;
+    font-size: 9pt !important;
     line-height: 1.4 !important;
     background-color: #eeeeee !important;
     color: #111 !important;
     white-space: pre !important;
     overflow-x: auto !important;
     display: block !important;
-    box-sizing: border-box !important;
+    box-sizing: border !important;
     padding: 4pt !important;
     margin: 4pt 0 !important;
     border: 0.5pt solid #ccc !important;
@@ -104,8 +103,8 @@ pre {
     max-width: 100vw !important;
 }
 
-code {
-    font-family: "Source Code Pro","Liberation Mono", monospace !important;
+code:not(pre code) {
+    font-family: "Source Code Pro", "Liberation Mono", monospace !important;
     font-size: 10pt !important;
     background-color: #eeeeee !important;
     color: #111 !important;
