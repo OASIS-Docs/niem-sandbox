@@ -114,14 +114,21 @@ pre {
   max-width: 100vw;
 }
 
+/* remove ALL layout from nested code */
 pre code {
   font-family: inherit;
   font-size: inherit;
+  line-height: inherit;
   background: none;
-  padding: 0;
-  border: none;
   color: inherit;
   white-space: inherit;
+  padding: 0;
+  margin: 0;
+  border: none;
+  width: auto;
+  max-width: none;
+  display: block;
+}
 }
 /* Offset block quote */
 blockquote {
