@@ -1,52 +1,68 @@
 # .github/workflows/generate_toc.yml
-name: Generate TOC for PSD01 doc
+name: 1.0 - Generate TOC for Markdown
 
 on:
-workflow_dispatch:
+  workflow_dispatch:
+    inputs:
+      sync_path:
+        description: |
+          Path to the directory containing the Markdown file to update.
+          Example: ndr/v6.0/psd01
+        default: ndr/v6.0/psd01
+        required: true
 
 permissions:
-contents: write
+  contents: write
+  actions: write
 
 jobs:
-generate_toc:
-  runs-on: ubuntu-latest
-  steps:
-    - name: Check out repository
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-        token: ${{ secrets.GITHUB_TOKEN }}
-        persist-credentials: true
+  generate_toc:
+    runs-on: ubuntu-latest
 
-    - name: Debug: list repo tree
-      run: |
-        echo "=== Repo root ==="
-        ls -R . || true
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-    - name: Find target Markdown
-      id: findfile
-      run: |
-        FILE=$(find ndr/v6.0/psd01 -maxdepth 1 -type f -name 'ndr-v6.0-psd01.md' | head -n1)
-        if [ -z "$FILE" ]; then
-          echo "::error::Could not locate ndr/v6.0/psd01/ndr-v6.0-psd01.md"
-          exit 1
-        fi
-        echo "path=$FILE" >> $GITHUB_OUTPUT
+      - name: Validate inputs
+        run: |
+          set -e
+          SYNC_PATH="${{ github.event.inputs.sync_path }}"
+          echo "SYNC_PATH=${SYNC_PATH}"
+          if [ ! -d "$SYNC_PATH" ]; then
+            echo "::error::Directory not found: ${SYNC_PATH}"
+            exit 1
+          fi
+          echo "SYNC_PATH=${SYNC_PATH}" >> $GITHUB_ENV
 
-    - name: Install markdown-toc
-      run: npm install --global markdown-toc
+      - name: Install markdown-toc
+        run: npm install --global markdown-toc
 
-    - name: Generate TOC
-      run: markdown-toc -i "${{ steps.findfile.outputs.path }}"
+      - name: Find Markdown file
+        id: findfile
+        run: |
+          MD_FILE=$(find "$SYNC_PATH" -maxdepth 1 -type f -name '*.md' | head -n1)
+          if [ -z "$MD_FILE" ]; then
+            echo "::error::No Markdown file found in ${SYNC_PATH}"
+            exit 1
+          fi
+          echo "MD_FILE=${MD_FILE}" >> $GITHUB_ENV
 
-    - name: Commit & push if changed
-      run: |
-        git config user.name "github-actions[bot]"
-        git config user.email "github-actions[bot]@users.noreply.github.com"
-        git add "${{ steps.findfile.outputs.path }}"
-        if ! git diff --cached --quiet; then
-          git commit -m "chore: update TOC in ${{ steps.findfile.outputs.path }}"
-          git push
-        else
-          echo "No changes to commit."
-        fi
+      - name: Generate TOC
+        run: |
+          markdown-toc -i "${{ env.MD_FILE }}"
+
+      - name: Commit & push changes
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          git add "${{ env.MD_FILE }}"
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "chore: update TOC in ${{ env.MD_FILE }}"
+            git push
+          fi
