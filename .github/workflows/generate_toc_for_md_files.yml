@@ -18,12 +18,16 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           persist-credentials: true
 
+      - name: List files in target directory
+        run: |
+          echo "=== Listing ndr/v6.0/psd01/ ==="
+          ls -R ndr/v6.0/psd01 || echo "Directory not found or empty"
+
       - name: Install markdown-toc
         run: npm install --global markdown-toc
 
       - name: Generate TOC for the PSD01 doc
-        run: |
-          markdown-toc -i ndr/v6.0/psd01/ndr-v6.0-psd01.md
+        run: markdown-toc -i ndr/v6.0/psd01/ndr-v6.0-psd01.md
 
       - name: Commit & push changes
         run: |
