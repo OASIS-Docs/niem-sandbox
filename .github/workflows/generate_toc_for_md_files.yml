@@ -10,7 +10,6 @@ permissions:
 jobs:
   toc:
     runs-on: ubuntu-latest
-
     steps:
       - name: Check out code
         uses: actions/checkout@v4
@@ -19,35 +18,35 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           persist-credentials: true
 
-      - name: Debug: Show working dir + repo tree
+      - name: Debug: list top-level and ndr folder
         run: |
-          echo "PWD = $(pwd)"
-          echo "=== Top-level files ==="
+          echo "Working directory: $(pwd)"
+          echo "Top-level files:"
           ls -1
-          echo "=== Recursive tree (depth=3) ==="
-          find . -maxdepth 3 | sed 's|^\./||'
+          echo "ndr folder contents (depth=2):"
+          find ndr -maxdepth 2 -print || echo "ndr directory not found"
 
-      - name: Locate target MD file
+      - name: Locate markdown file
         id: findfile
         run: |
-          FILE=$(find ndr -type f -name 'ndr-v6.0-psd01.md' | head -n1 || true)
+          FILE=$(find ndr -type f -name 'ndr-v6.0-psd01.md' | head -n 1)
           if [ -z "$FILE" ]; then
-            echo "::error file=workflow::Could not find ndr-v6.0-psd01.md under ndr/"
+            echo "::error::Could not find ndr-v6.0-psd01.md"
             exit 1
           fi
-          echo "Found: $FILE"
-          echo "::set-output name=path::$FILE"
+          echo "Found file: $FILE"
+          echo "path=$FILE" >> $GITHUB_OUTPUT
 
       - name: Install markdown-toc
         run: npm install --global markdown-toc
 
       - name: Generate TOC
-        run: |
-          markdown-toc -i "${{ steps.findfile.outputs.path }}"
+        run: markdown-toc -i "${{ steps.findfile.outputs.path }}"
 
-      - name: Commit & push if changed
+      - name: Commit & push changes if any
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add "${{ steps.findfile.outputs.path }}"
-          git diff --staged --quiet || (git commit -m "chore: update TOC in ${{ steps.findfile.outputs.path }}" && git push)
+          git diff --cached --quiet \
+            || (git commit -m "chore: update TOC in ${{ steps.findfile.outputs.path }}" && git push)
