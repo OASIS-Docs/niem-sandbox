@@ -1,16 +1,25 @@
 # .github/workflows/toc.yml
 name: Update TOC
 
+# Manual trigger only
 on:
   workflow_dispatch:
+
+# Grant the workflow permission to write repository contents
+permissions:
+  contents: write
 
 jobs:
   toc:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      # Checkout the repo with write credentials
+      - name: Check out code
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: true
 
       - name: Install markdown-toc
         run: npm install --global markdown-toc
@@ -20,9 +29,10 @@ jobs:
           find . -name '*.md' -not -path './node_modules/*' \
             -exec markdown-toc -i {} \;
 
-      - name: Commit changes
+      - name: Commit & push changes
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git commit -am "chore: update TOC" || echo "No changes"
+          git add .
+          git commit -m "chore: update TOC" || echo "No changes to commit"
           git push
