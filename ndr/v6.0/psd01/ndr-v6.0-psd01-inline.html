@@ -22,10 +22,17 @@ html {
     overflow-x: auto;
 }
 
+/* Major section breaks: start each h1 on a new page */
 h1 {
     font-size: 18pt;
     page-break-before: always;
 }
+
+/* Exception: first h1 (document title) stays with preceding content (e.g., logo) */
+h1:first-of-type {
+    page-break-before: avoid;
+}
+
 h2 { font-size: 14pt; }
 h3 { font-size: 13pt; }
 h4 { font-size: 12pt; }
@@ -85,9 +92,11 @@ th {
 code {
   font-family: "Source Code Pro", "Liberation Mono", monospace;
   font-size: 9pt;
-  background-color: #eeeeee;
+  background-color: transparent;
   color: #111;
-  padding: 2px 2px;
+  border: 1px solid #ccc;
+  border-radius: 3px;
+  padding: 2px 5px;
   white-space: nowrap;
 }
 
