@@ -93,11 +93,9 @@ th {
 code {
   font-family: "Source Code Pro", "Liberation Mono", monospace;
   font-size: 9pt;
-  background-color: transparent;
+  background-color: #eeeeee;
   color: #111;
-  border: 1px solid #ccc;
-  border-radius: 3px;
-  padding: 2px 5px;
+  padding: 2px 2px;
   white-space: nowrap;
 }
 
