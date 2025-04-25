@@ -2,7 +2,7 @@
 name: Update TOC
 
 on:
-  pull_request:
+  workflow_dispatch:
 
 jobs:
   toc:
