@@ -501,6 +501,7 @@ In NIEM terms, the package of data shared at runtime is a [message](#def). This 
                                                               | }
 
 ```
+
 <figcaption><a name="ex3-2">Example 3-2: Example of messages in XML and JSON syntax</a></figcaption>
 
 The data structure of a NIEM message appears to be a tree with a root node. It is actually a directed graph with an initial node called the [message object](#def). For example, the [message object](#def) in [example 3-2](#ex3-2) is the `msg:Request` element in the XML message. In the JSON message it is the value for the `msg:Request` key.
