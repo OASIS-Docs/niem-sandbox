@@ -1,0 +1,28 @@
+# .github/workflows/toc.yml
+name: Update TOC
+
+on:
+  pull_request:
+
+jobs:
+  toc:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install markdown-toc
+        run: npm install --global markdown-toc
+
+      - name: Generate TOC
+        run: |
+          find . -name '*.md' -not -path './node_modules/*' \
+            -exec markdown-toc -i {} \;
+
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git commit -am "chore: update TOC" || echo "No changes"
+          git push
