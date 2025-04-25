@@ -8,8 +8,6 @@
 
 ## 27 January 2025
 
-&nbsp;
-
 #### This stage:
 
 https://docs.oasis-open.org/niemopen/ndr/v6.0/psd01/ndr-v6.0-psd01.html \
