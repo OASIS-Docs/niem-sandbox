@@ -200,7 +200,6 @@ class PDFGenerator:
                 '-T', '25', '-B', '20',
                 '--header-spacing', '6',
                 '--header-font-size', '10',
-                '--header-center', 'Non-Standards Track Work Product',
                 '--footer-line',
                 '--footer-spacing', '4',
                 '--footer-left', '',
