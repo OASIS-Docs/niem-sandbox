@@ -13,7 +13,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 
 # Hardcoded stylesheet (upgraded for Mikey, 2025-04-14) with narrow fonts,
 # minimal styling for code blocks, transparent inline code background,
-# and page breaks before major sections (h1).
+# page breaks before major sections (h1), but allowing the first h1 (document title) to stay with preceding logo.
 RAW_INLINE_CSS = """
 <style>
 /* OASIS specification styles for HTML generated from Markdown or similar sources */
@@ -30,10 +30,17 @@ html {
     overflow-x: auto;
 }
 
+/* Major section breaks: start each h1 on a new page */
 h1 {
     font-size: 18pt;
     page-break-before: always;
 }
+
+/* Exception: first h1 (document title) stays with preceding content (e.g., logo) */
+h1:first-of-type {
+    page-break-before: avoid;
+}
+
 h2 { font-size: 14pt; }
 h3 { font-size: 13pt; }
 h4 { font-size: 12pt; }
@@ -91,17 +98,19 @@ th {
 
 /* Inline Code: transparent background, minimal border */
 code {
-  font-family: "Source Code Pro", "Liberation Mono", monospace;
+  font-family: \"Source Code Pro\", \"Liberation Mono\", monospace;
   font-size: 9pt;
-  background-color: #eeeeee;
+  background-color: transparent;
   color: #111;
-  padding: 2px 2px;
+  border: 1px solid #ccc;
+  border-radius: 3px;
+  padding: 2px 5px;
   white-space: nowrap;
 }
 
 /* Block code */
 pre {
-  font-family: "Source Code Pro", "Liberation Mono", monospace;
+  font-family: \"Source Code Pro\", \"Liberation Mono\", monospace;
   font-size: 9pt;
   line-height: 1.4;
   background-color: #eeeeee;
@@ -142,10 +151,9 @@ blockquote {
 </style>
 """
 
-# Define markers for our injected CSS block.
+# CSS injection markers
 INLINE_CSS_MARKER_BEGIN = "<!-- BEGIN INLINE CSS -->"
 INLINE_CSS_MARKER_END = "<!-- END INLINE CSS -->"
-# Build the full block to inject.
 INLINE_CSS_BLOCK = INLINE_CSS_MARKER_BEGIN + "\n" + RAW_INLINE_CSS + "\n" + INLINE_CSS_MARKER_END
 
 class PDFGenerator:
@@ -159,24 +167,19 @@ class PDFGenerator:
         with open(html_path, 'r', encoding='utf-8') as f:
             html = f.read()
 
-        # Remove any previously injected CSS marked with our unique markers.
+        # Remove any previously injected CSS
         html = re.sub(r'<!-- BEGIN INLINE CSS -->.*?<!-- END INLINE CSS -->', '', html, flags=re.DOTALL)
 
-        # Insert the new INLINE_CSS_BLOCK. Preferably before the closing </head> tag.
+        # Inject new CSS block before </head>
         if '</head>' in html:
             html = html.replace('</head>', INLINE_CSS_BLOCK + "\n</head>")
         elif '<head>' in html:
             html = html.replace('<head>', '<head>\n' + INLINE_CSS_BLOCK)
         else:
-            # If no <head> tag exists, prepend it.
             html = INLINE_CSS_BLOCK + html
 
-        # Determine the output path.
         input_path = Path(html_path)
-        if "-inline" in input_path.stem:
-            out_path = input_path
-        else:
-            out_path = input_path.with_name(f"{input_path.stem}-inline{input_path.suffix}")
+        out_path = input_path if "-inline" in input_path.stem else input_path.with_name(f"{input_path.stem}-inline{input_path.suffix}")
 
         with open(out_path, 'w', encoding='utf-8') as f:
             f.write(html)
@@ -186,12 +189,10 @@ class PDFGenerator:
 
     def generate_pdf(self):
         try:
-            # Parse the date string.
             date_obj = datetime.strptime(self.date_str, '%Y-%m-%d')
             formatted_date = date_obj.strftime('%d %B %Y')
             year = date_obj.strftime('%Y')
 
-            # Process HTML to inject inline CSS.
             processed_html = self.inject_css_inline(self.html_file)
 
             cli_command = [
@@ -222,7 +223,6 @@ class PDFGenerator:
         except Exception as e:
             logging.exception('Unexpected error during PDF generation: %s', str(e))
             raise
-
 
 def main(html_file, date_str):
     logging.info('Starting PDF generation process for HTML file: %s', html_file)
