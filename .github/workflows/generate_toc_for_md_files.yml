@@ -10,6 +10,7 @@ permissions:
 jobs:
   toc:
     runs-on: ubuntu-latest
+
     steps:
       - name: Check out code
         uses: actions/checkout@v4
@@ -18,21 +19,35 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           persist-credentials: true
 
-      - name: List files in target directory
+      - name: Debug: Show working dir + repo tree
         run: |
-          echo "=== Listing ndr/v6.0/psd01/ ==="
-          ls -R ndr/v6.0/psd01 || echo "Directory not found or empty"
+          echo "PWD = $(pwd)"
+          echo "=== Top-level files ==="
+          ls -1
+          echo "=== Recursive tree (depth=3) ==="
+          find . -maxdepth 3 | sed 's|^\./||'
+
+      - name: Locate target MD file
+        id: findfile
+        run: |
+          FILE=$(find ndr -type f -name 'ndr-v6.0-psd01.md' | head -n1 || true)
+          if [ -z "$FILE" ]; then
+            echo "::error file=workflow::Could not find ndr-v6.0-psd01.md under ndr/"
+            exit 1
+          fi
+          echo "Found: $FILE"
+          echo "::set-output name=path::$FILE"
 
       - name: Install markdown-toc
         run: npm install --global markdown-toc
 
-      - name: Generate TOC for the PSD01 doc
-        run: markdown-toc -i ndr/v6.0/psd01/ndr-v6.0-psd01.md
+      - name: Generate TOC
+        run: |
+          markdown-toc -i "${{ steps.findfile.outputs.path }}"
 
-      - name: Commit & push changes
+      - name: Commit & push if changed
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add ndr/v6.0/psd01/ndr-v6.0-psd01.md
-          git commit -m "chore: update TOC in ndr-v6.0-psd01.md" || echo "No TOC changes"
-          git push
+          git add "${{ steps.findfile.outputs.path }}"
+          git diff --staged --quiet || (git commit -m "chore: update TOC in ${{ steps.findfile.outputs.path }}" && git push)
