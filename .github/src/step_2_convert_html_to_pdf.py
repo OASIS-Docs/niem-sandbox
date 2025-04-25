@@ -11,7 +11,9 @@ from pathlib import Path
 # Initialize logging to print to console
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# Hardcoded stylesheet (upgraded for Mikey, 2025-04-14) with narrow fonts and minimal styling for code blocks.
+# Hardcoded stylesheet (upgraded for Mikey, 2025-04-14) with narrow fonts,
+# minimal styling for code blocks, transparent inline code background,
+# and page breaks before major sections (h1).
 RAW_INLINE_CSS = """
 <style>
 /* OASIS specification styles for HTML generated from Markdown or similar sources */
@@ -28,7 +30,10 @@ html {
     overflow-x: auto;
 }
 
-h1 { font-size: 18pt; }
+h1 {
+    font-size: 18pt;
+    page-break-before: always;
+}
 h2 { font-size: 14pt; }
 h3 { font-size: 13pt; }
 h4 { font-size: 12pt; }
@@ -84,11 +89,11 @@ th {
     background-color: #1a8cff;
 }
 
-/* Inline Code */
+/* Inline Code: transparent background, minimal border */
 code {
   font-family: "Source Code Pro", "Liberation Mono", monospace;
   font-size: 9pt;
-  background-color: #eeeeee;
+  background-color: transparent;
   color: #111;
   border: 1px solid #ccc;
   border-radius: 3px;
@@ -169,7 +174,6 @@ class PDFGenerator:
             html = INLINE_CSS_BLOCK + html
 
         # Determine the output path.
-        # If the current file name already contains '-inline', overwrite in place.
         input_path = Path(html_path)
         if "-inline" in input_path.stem:
             out_path = input_path
@@ -220,6 +224,7 @@ class PDFGenerator:
         except Exception as e:
             logging.exception('Unexpected error during PDF generation: %s', str(e))
             raise
+
 
 def main(html_file, date_str):
     logging.info('Starting PDF generation process for HTML file: %s', html_file)
