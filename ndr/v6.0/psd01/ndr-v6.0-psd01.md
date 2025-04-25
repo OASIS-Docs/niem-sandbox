@@ -1,4 +1,4 @@
-<img src="https://github.com/niemopen/oasis-open-project/raw/main/artwork/NIEM-NO-Logo-v5.png" alt="NIEM Logo" style="max-width: 300px; display: inline-block; page-break-after: avoid;"/>
+<img src="https://github.com/niemopen/oasis-open-project/raw/main/artwork/NIEM-NO-Logo-v5.png" alt="NIEM Logo" style="max-width: 350px; display: inline-block; page-break-after: avoid;"/>
 
 ---
 
