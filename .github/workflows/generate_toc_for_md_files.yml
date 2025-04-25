@@ -1,52 +1,52 @@
-# .github/workflows/toc.yml
-name: Update TOC (manual)
+# .github/workflows/generate_toc.yml
+name: Generate TOC for PSD01 doc
 
 on:
-  workflow_dispatch:
+workflow_dispatch:
 
 permissions:
-  contents: write
+contents: write
 
 jobs:
-  toc:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
-          persist-credentials: true
+generate_toc:
+  runs-on: ubuntu-latest
+  steps:
+    - name: Check out repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        token: ${{ secrets.GITHUB_TOKEN }}
+        persist-credentials: true
 
-      - name: Debug: list top-level and ndr folder
-        run: |
-          echo "Working directory: $(pwd)"
-          echo "Top-level files:"
-          ls -1
-          echo "ndr folder contents (depth=2):"
-          find ndr -maxdepth 2 -print || echo "ndr directory not found"
+    - name: Debug: list repo tree
+      run: |
+        echo "=== Repo root ==="
+        ls -R . || true
 
-      - name: Locate markdown file
-        id: findfile
-        run: |
-          FILE=$(find ndr -type f -name 'ndr-v6.0-psd01.md' | head -n 1)
-          if [ -z "$FILE" ]; then
-            echo "::error::Could not find ndr-v6.0-psd01.md"
-            exit 1
-          fi
-          echo "Found file: $FILE"
-          echo "path=$FILE" >> $GITHUB_OUTPUT
+    - name: Find target Markdown
+      id: findfile
+      run: |
+        FILE=$(find ndr/v6.0/psd01 -maxdepth 1 -type f -name 'ndr-v6.0-psd01.md' | head -n1)
+        if [ -z "$FILE" ]; then
+          echo "::error::Could not locate ndr/v6.0/psd01/ndr-v6.0-psd01.md"
+          exit 1
+        fi
+        echo "path=$FILE" >> $GITHUB_OUTPUT
 
-      - name: Install markdown-toc
-        run: npm install --global markdown-toc
+    - name: Install markdown-toc
+      run: npm install --global markdown-toc
 
-      - name: Generate TOC
-        run: markdown-toc -i "${{ steps.findfile.outputs.path }}"
+    - name: Generate TOC
+      run: markdown-toc -i "${{ steps.findfile.outputs.path }}"
 
-      - name: Commit & push changes if any
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add "${{ steps.findfile.outputs.path }}"
-          git diff --cached --quiet \
-            || (git commit -m "chore: update TOC in ${{ steps.findfile.outputs.path }}" && git push)
+    - name: Commit & push if changed
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        git add "${{ steps.findfile.outputs.path }}"
+        if ! git diff --cached --quiet; then
+          git commit -m "chore: update TOC in ${{ steps.findfile.outputs.path }}"
+          git push
+        else
+          echo "No changes to commit."
+        fi
