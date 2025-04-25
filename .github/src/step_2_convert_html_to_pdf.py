@@ -12,7 +12,8 @@ from pathlib import Path
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Hardcoded stylesheet (upgraded for Mikey, 2025-04-14) with narrow fonts,
-# minimal styling for code blocks, transparent inline code background,
+# minimal styling for inline code (no borders, same background),
+# and untouched block code styling,
 # page breaks before major sections (h1), but allowing the first h1 (document title) to stay with preceding logo.
 RAW_INLINE_CSS = """
 <style>
@@ -96,22 +97,21 @@ th {
     background-color: #1a8cff;
 }
 
-/* Inline Code: transparent background, minimal border */
+/* Inline Code: same background as block code, no borders */
 code {
-  font-family: \"Source Code Pro\", \"Liberation Mono\", monospace;
+  font-family: "Source Code Pro", "Liberation Mono", monospace;
   font-size: 9pt;
-  background-color: transparent;
+  background-color: #eeeeee;
   color: #111;
-  border: 1px solid #ccc;
-  border-radius: 3px;
   padding: 2px 5px;
   white-space: nowrap;
+  border: none;
 }
 
-/* Block code */
+/* Block code (unchanged) */
 pre {
-  font-family: \"Source Code Pro\", \"Liberation Mono\", monospace;
-  font-size: 9pt;
+  font-family: "Source Code Pro", "Liberation Mono", monospace;
+  font-size: 8pt;
   line-height: 1.4;
   background-color: #eeeeee;
   color: #111;
