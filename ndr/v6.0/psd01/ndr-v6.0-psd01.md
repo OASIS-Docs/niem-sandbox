@@ -107,7 +107,6 @@ For complete copyright information please see the Notices section in the Appendi
 - [3. Overview of the NIEM Technical Architecture](#3-overview-of-the-niem-technical-architecture)
   - [3.1 Machine-to-machine data specifications](#31-machine-to-machine-data-specifications)
     - [3.1.1 Messages](#311-messages)
-    - [XML vs JSON Message Example](#xml-vs-json-message-example)
     - [3.1.2 Message format](#312-message-format)
     - [3.1.3 Message type](#313-message-type)
     - [3.1.4 Message specification](#314-message-specification)
