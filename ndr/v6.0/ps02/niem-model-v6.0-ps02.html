@@ -1084,5 +1084,25 @@ and its official outputs. OASIS welcomes reference to, and
 implementation and use of, specifications, while reserving the right to
 enforce its marks against misleading uses. Please see <a href="https://www.oasis-open.org/policies-guidelines/trademark/">https://www.oasis-open.org/policies-guidelines/trademark/</a><a class="uri" href="https://www.oasis-open.org/policies-guidelines/trademark/"></a>
 for above guidance.</p>
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const anchors = [...document.querySelectorAll("a[href^='#']")];
+  const headings = [...document.querySelectorAll("h1, h2, h3, h4, h5, h6")];
+
+  anchors.forEach(link => {
+    const targetId = link.getAttribute("href").substring(1); // strip '#'
+    const linkText = link.textContent.trim();
+
+    const matchingHeading = headings.find(h => {
+      const headingText = h.textContent.trim();
+      return headingText === linkText || headingText.startsWith(linkText);
+    });
+
+    if (matchingHeading) {
+      matchingHeading.setAttribute("id", targetId); // Force match
+    }
+  });
+});
+</script>
 </body>
 </html>
