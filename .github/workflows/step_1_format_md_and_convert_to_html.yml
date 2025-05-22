@@ -1,4 +1,4 @@
-name: 1.0 - Convert Markdown -> HTML
+name: 1.0 - Convert Markdown → HTML
 
 on:
   workflow_dispatch:
@@ -24,60 +24,45 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
         with:
-          fetch-depth: 0  # Fetch all history for all branches and tags
-
+          fetch-depth: 0
 
       # Step 2: Validate inputs
       - name: Validate inputs
         run: |
           set -e
           SYNC_PATH="${{ github.event.inputs.sync_path }}"
-
           echo "Received SYNC_PATH: $SYNC_PATH"
-          echo "Received MODIFY_DATE: $MODIFY_DATE"
-
-          # Validate file path
           if [ ! -d "$SYNC_PATH" ]; then
             echo "Invalid SYNC_PATH. Directory does not exist: $SYNC_PATH"
             exit 1
           fi
-
           echo "SYNC_PATH=$SYNC_PATH" >> $GITHUB_ENV
 
-      # Step 3: Setup Node.js environment
-      - name: Set up Node.js
+      # Step 3: Set up Node.js & Prettier
+      - name: Set up Node.js & Install Prettier
         uses: actions/setup-node@v3
         with:
           node-version: '14'
-          # Removed cache: 'npm' since there is no package-lock.json or yarn.lock
-
-
-      # Step 4: Install Prettier globally
       - name: Install Prettier
         run: npm install -g prettier
 
-      # Step 5: Setup Python environment
-      - name: Set up Python
+      # Step 4: Set up Python & dependencies
+      - name: Set up Python and install dependencies
         uses: actions/setup-python@v4
         with:
           python-version: '3.x'
-
-      # Step 6: Install Python dependencies
-      - name: Install Python dependencies
+      - name: Create venv & install Python deps + pandoc
         run: |
-          echo "Installing dependencies"
           cd .github/src
-          echo "Inside src directory: $(pwd)"
-          ls -ltra
           python3 -m venv venv
-          source venv/bin/activate
+          . venv/bin/activate
           pip install --upgrade pip
           pip install beautifulsoup4 requests
           sudo apt-get update
           sudo apt-get install -y pandoc
         shell: bash
 
-      # Step 7: Format MD and Convert to HTML
+      # Step 5: Format MD and Convert to HTML
       - name: Format MD and Convert to HTML
         env:
           SYNC_PATH: ${{ env.SYNC_PATH }}
@@ -92,15 +77,17 @@ jobs:
             exit 1
           fi
 
-          # compute the .html output path
           OUTPUT_FILE="${MD_FILE%.md}.html"
-
           echo "Converting: $MD_FILE → $OUTPUT_FILE"
-          python3 .github/src/step_1_markdown_to_html_converter_V3_0.py \
+
+          # use the venv python
+          .github/src/venv/bin/python3 .github/src/step_1_markdown_to_html_converter_V3_0.py \
             "$MD_FILE" \
             "$OUTPUT_FILE" \
             --git_repo_basedir "$GIT_REPO_BASEDIR"
-      # Step 8: Commit changes
+        shell: bash
+
+      # Step 6: Commit changes
       - name: Commit changes
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -112,14 +99,12 @@ jobs:
           echo "Adding all changes within SYNC_PATH: $SYNC_PATH"
           git add -A "$SYNC_PATH/"
 
-          # Check if there are any changes staged for commit
           if git diff --cached --quiet; then
             echo "No changes to commit"
-          else
-            # Commit changes and push if there are any
-            COMMIT_MESSAGE="Formatted and converted Markdown to HTML, updated modification dates"
-            echo "Committing changes with message: '$COMMIT_MESSAGE'"
-            git commit -m "$COMMIT_MESSAGE"
-            git push
+            exit 0
           fi
 
+          COMMIT_MESSAGE="Formatted and converted Markdown to HTML, updated modification dates"
+          git commit -m "$COMMIT_MESSAGE"
+          git push
+        shell: bash
