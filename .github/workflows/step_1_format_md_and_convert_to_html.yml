@@ -81,23 +81,25 @@ jobs:
       - name: Format MD and Convert to HTML
         env:
           SYNC_PATH: ${{ env.SYNC_PATH }}
-          MODIFY_DATE: ${{ env.MODIFY_DATE }}
           GIT_REPO_BASEDIR: ${{ github.workspace }}
         run: |
           echo "Sanitizing SYNC_PATH: $SYNC_PATH"
-          SYNC_PATH=$(echo "$SYNC_PATH" | tr -d '\n' | xargs)  # Ensure no extra characters
+          SYNC_PATH=$(echo "$SYNC_PATH" | tr -d '\n' | xargs)
+
           MD_FILE=$(find "$SYNC_PATH" -name '*.md' | head -n 1)
-          
           if [ -z "$MD_FILE" ]; then
             echo "No Markdown file found in $SYNC_PATH"
             exit 1
           fi
-      
-          echo "Running step_1_format_md_and_convert_to_html_v3_0.sh with file: $MD_FILE"
-          chmod +x .github/scripts/step_1_format_md_and_convert_to_html_v3_0.sh
-          .github/scripts/step_1_format_md_and_convert_to_html_v3_0.sh "$MD_FILE" "$GIT_REPO_BASEDIR" "$SYNC_PATH" --md-format --md-to-html
 
+          # compute the .html output path
+          OUTPUT_FILE="${MD_FILE%.md}.html"
 
+          echo "Converting: $MD_FILE → $OUTPUT_FILE"
+          python3 .github/src/step_1_markdown_to_html_converter_V3_0.py \
+            "$MD_FILE" \
+            "$OUTPUT_FILE" \
+            --git_repo_basedir "$GIT_REPO_BASEDIR"
       # Step 8: Commit changes
       - name: Commit changes
         env:
