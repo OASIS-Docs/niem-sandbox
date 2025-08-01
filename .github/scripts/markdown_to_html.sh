@@ -1,445 +1,183 @@
-#!/bin/bash
-# Enterprise Markdown to HTML Converter Shell Script
-# Optimized for performance, error handling, and maintainability
+name: Enterprise Markdown to HTML Converter
 
-set -euo pipefail  # Exit on error, undefined vars, pipe failures
-IFS=$'\n\t'       # Secure Internal Field Separator
+on:
+  workflow_dispatch:
+    inputs:
+      sync_path:
+        description: 'Path to the directory with markdown files (e.g., ndr/v6.0/psd01).'
+        required: true
+        type: string
+        default: 'ndr/v6.0/psd01'
+      operation_mode:
+        description: 'Select the conversion operation.'
+        required: true
+        type: choice
+        default: 'format_and_convert'
+        options:
+          - 'format_and_convert'
+          - 'format_only'
+          - 'convert_only'
+          - 'validate_only'
+      enable_debug:
+        description: 'Enable debug logging for troubleshooting.'
+        required: false
+        type: boolean
+        default: false
+      force_download_assets:
+        description: 'Force re-download of external assets (e.g., stylesheets).'
+        required: false
+        type: boolean
+        default: false
 
-# ============================================================================
-# CONFIGURATION & CONSTANTS  
-# ============================================================================
+env:
+  PYTHONUNBUFFERED: '1'
+  PYTHONDONTWRITEBYTECODE: '1'
+  PIP_DISABLE_PIP_VERSION_CHECK: '1'
+  NODE_VERSION: '18'
+  PYTHON_VERSION: '3.11'
 
-readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-readonly REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
-readonly VENV_PATH="${REPO_ROOT}/.github/src/venv"
-readonly PYTHON_SCRIPT="${REPO_ROOT}/.github/src/step_1_markdown_to_html_converter_V3_0.py"
-readonly LOGFILE="${REPO_ROOT}/conversion.log"
+jobs:
+  validate-and-convert:
+    name: Validate, Build, and Convert
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: write
 
-# Performance tracking
-readonly START_TIME=$(date +%s.%N)
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
 
-# Colors for output
-readonly RED='\033[0;31m'
-readonly GREEN='\033[0;32m'
-readonly YELLOW='\033[1;33m'
-readonly BLUE='\033[0;34m'
-readonly NC='\033[0m' # No Color
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
 
-# ============================================================================
-# UTILITY FUNCTIONS
-# ============================================================================
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
 
-log() {
-    local level="$1"
-    shift
-    local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
-    echo -e "${timestamp} [${level}] $*" | tee -a "${LOGFILE}"
-}
+      - name: Install System and Language Dependencies
+        run: |
+          echo "::group::Installing Dependencies"
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends pandoc bc jq curl wget
+          npm install -g prettier@latest
+          echo "::endgroup::"
 
-log_info() { log "INFO" "${BLUE}$*${NC}"; }
-log_warn() { log "WARN" "${YELLOW}$*${NC}"; }
-log_error() { log "ERROR" "${RED}$*${NC}"; }
-log_success() { log "SUCCESS" "${GREEN}$*${NC}"; }
+      - name: Validate Inputs and Paths
+        id: validate
+        run: |
+          set -euo pipefail
+          SYNC_PATH="${{ github.event.inputs.sync_path }}"
+          echo "Validating path: $SYNC_PATH"
+          if [[ -z "$SYNC_PATH" || ! -d "$SYNC_PATH" ]]; then
+            echo "::error::Directory does not exist or path is invalid: $SYNC_PATH"
+            exit 1
+          fi
 
-sanitize_path() {
-    local path="$1"
-    # Remove newlines, carriage returns, and trim whitespace
-    path=$(echo "$path" | tr -d '\n\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-    # Normalize path
-    path=$(realpath -m "$path" 2>/dev/null || echo "$path")
-    echo "$path"
-}
+          MD_COUNT=$(find "$SYNC_PATH" -maxdepth 1 -name "*.md" | wc -l)
+          if [[ $MD_COUNT -eq 0 ]]; then
+            echo "::error::No markdown files found in: $SYNC_PATH"
+            exit 1
+          fi
 
-validate_file_exists() {
-    local file="$1"
-    local description="$2"
-    
-    if [[ ! -f "$file" ]]; then
-        log_error "$description not found: $file"
-        return 1
-    fi
-    log_info "$description found: $file"
-    return 0
-}
+          echo "Validation successful. Found $MD_COUNT markdown file(s)."
+          echo "sync_path=$SYNC_PATH" >> $GITHUB_OUTPUT
 
-validate_directory_exists() {
-    local dir="$1"
-    local description="$2"
-    
-    if [[ ! -d "$dir" ]]; then
-        log_error "$description not found: $dir"
-        return 1
-    fi
-    log_info "$description found: $dir"
-    return 0
-}
+      - name: Configure Git
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
 
-check_command() {
-    local cmd="$1"
-    if ! command -v "$cmd" &> /dev/null; then
-        log_error "Required command not found: $cmd"
-        return 1
-    fi
-    return 0
-}
+      - name: Execute Conversion Script
+        id: convert
+        env:
+          SYNC_PATH: ${{ steps.validate.outputs.sync_path }}
+          FORCE_DOWNLOAD: ${{ github.event.inputs.force_download_assets }}
+          OPERATION_MODE: ${{ github.event.inputs.operation_mode }}
+          ENABLE_DEBUG: ${{ github.event.inputs.enable_debug }}
+        run: |
+          set -euo pipefail
+          chmod +x .github/scripts/step_1_format_md_and_convert_to_html_v3_0.sh
 
-performance_report() {
-    local end_time=$(date +%s.%N)
-    local duration=$(echo "$end_time - $START_TIME" | bc -l 2>/dev/null || echo "N/A")
-    log_success "Total execution time: ${duration}s"
-}
+          # Set operation flags based on input
+          MD_FORMAT_FLAG=""
+          MD_CONVERT_FLAG=""
+          case "$OPERATION_MODE" in
+            "format_and_convert")
+              MD_FORMAT_FLAG="--md-format"
+              MD_CONVERT_FLAG="--md-to-html"
+              ;;
+            "format_only")
+              MD_FORMAT_FLAG="--md-format"
+              ;;
+            "convert_only")
+              MD_CONVERT_FLAG="--md-to-html"
+              ;;
+          esac
+          
+          # Set debug flag
+          DEBUG_FLAG=""
+          if [[ "$ENABLE_DEBUG" == "true" ]]; then
+            DEBUG_FLAG="--debug"
+          fi
 
-cleanup() {
-    local exit_code=$?
-    if [[ $exit_code -ne 0 ]]; then
-        log_error "Script failed with exit code: $exit_code"
-    fi
-    performance_report
-    exit $exit_code
-}
+          SCRIPT_ARGS=(
+            "--sync-path" "$SYNC_PATH"
+            $MD_FORMAT_FLAG
+            $MD_CONVERT_FLAG
+            $DEBUG_FLAG
+          )
 
-# ============================================================================
-# DEPENDENCY MANAGEMENT
-# ============================================================================
+          echo "Executing conversion..."
+          ./.github/scripts/step_1_format_md_and_convert_to_html_v3_0.sh "${SCRIPT_ARGS[@]}"
+          echo "::notice::Conversion script finished."
 
-check_system_dependencies() {
-    log_info "Checking system dependencies..."
-    
-    local missing_deps=()
-    local required_commands=("python3" "git" "bc" "realpath")
-    
-    for cmd in "${required_commands[@]}"; do
-        if ! check_command "$cmd"; then
-            missing_deps+=("$cmd")
-        fi
-    done
-    
-    if [[ ${#missing_deps[@]} -gt 0 ]]; then
-        log_error "Missing system dependencies: ${missing_deps[*]}"
-        log_error "Please install missing dependencies and try again"
-        return 1
-    fi
-    
-    log_success "All system dependencies available"
-    return 0
-}
+      - name: Commit and Push Changes
+        run: |
+          set -euo pipefail
+          SYNC_PATH="${{ steps.validate.outputs.sync_path }}"
+          git add -A "$SYNC_PATH/"
+          git add -A "styles/" 2>/dev/null || true
 
-setup_python_environment() {
-    log_info "Setting up Python virtual environment..."
-    
-    # Create virtual environment if it doesn't exist
-    if [[ ! -d "$VENV_PATH" ]]; then
-        log_info "Creating virtual environment at: $VENV_PATH"
-        python3 -m venv "$VENV_PATH" || {
-            log_error "Failed to create virtual environment"
-            return 1
-        }
-    else
-        log_info "Virtual environment already exists: $VENV_PATH"
-    fi
-    
-    # Activate virtual environment
-    # shellcheck source=/dev/null
-    source "$VENV_PATH/bin/activate" || {
-        log_error "Failed to activate virtual environment"
-        return 1
-    }
-    
-    log_info "Virtual environment activated"
-    
-    # Upgrade pip
-    log_info "Upgrading pip..."
-    pip install --upgrade pip --quiet || {
-        log_error "Failed to upgrade pip"
-        return 1
-    }
-    
-    # Install/upgrade dependencies
-    log_info "Installing Python dependencies..."
-    local dependencies=(
-        "beautifulsoup4>=4.12.0"
-        "requests>=2.31.0"
-        "aiohttp>=3.8.0"
-        "aiofiles>=23.0.0"
-    )
-    
-    for dep in "${dependencies[@]}"; do
-        log_info "Installing: $dep"
-        pip install "$dep" --quiet || {
-            log_error "Failed to install $dep"
-            return 1
-        }
-    done
-    
-    log_success "Python environment setup completed"
-    return 0
-}
+          if git diff --cached --quiet; then
+            echo "::notice::No changes detected. Nothing to commit."
+          else
+            COMMIT_MESSAGE="🚀 Enterprise conversion for $SYNC_PATH"
+            git commit -m "$COMMIT_MESSAGE"
+            git push
+            echo "::notice::Changes committed and pushed successfully."
+          fi
 
-install_prettier() {
-    log_info "Checking Prettier installation..."
-    
-    if check_command "prettier"; then
-        log_info "Prettier already available"
-        return 0
-    fi
-    
-    if check_command "npm"; then
-        log_info "Installing Prettier globally..."
-        npm install -g prettier --silent || {
-            log_error "Failed to install Prettier"
-            return 1
-        }
-        log_success "Prettier installed successfully"
-    else
-        log_warn "npm not available, Prettier installation skipped"
-        log_warn "Markdown formatting may not work"
-    fi
-    
-    return 0
-}
+      - name: Upload Conversion Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: conversion-results-${{ github.run_id }}
+          path: |
+            ${{ steps.validate.outputs.sync_path }}/**/*.html
+            ${{ steps.validate.outputs.sync_path }}/**/*.css
+            conversion.log
+          retention-days: 7
 
-# ============================================================================
-# MAIN PROCESSING FUNCTIONS
-# ============================================================================
+      - name: Write Job Summary
+        if: always()
+        run: |
+          echo "## 🎯 Enterprise Conversion Summary" >> $GITHUB_STEP_SUMMARY
+          echo "| Parameter | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Status** | ${{ job.status }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Path** | \`${{ steps.validate.outputs.sync_path }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Operation** | ${{ github.event.inputs.operation_mode }} |" >> $GITHUB_STEP_SUMMARY
 
-find_markdown_file() {
-    local search_dir="$1"
-    
-    log_info "Searching for Markdown files in: $search_dir"
-    
-    # Find .md files (non-recursive for safety)
-    local md_files
-    mapfile -t md_files < <(find "$search_dir" -maxdepth 1 -type f -name "*.md" 2>/dev/null)
-    
-    if [[ ${#md_files[@]} -eq 0 ]]; then
-        log_error "No Markdown files found in: $search_dir"
-        return 1
-    elif [[ ${#md_files[@]} -eq 1 ]]; then
-        echo "${md_files[0]}"
-        log_info "Found Markdown file: ${md_files[0]}"
-        return 0
-    else
-        log_warn "Multiple Markdown files found:"
-        printf '%s\n' "${md_files[@]}" | while read -r file; do
-            log_warn "  - $file"
-        done
-        # Return the first one
-        echo "${md_files[0]}"
-        log_info "Using first file: ${md_files[0]}"
-        return 0
-    fi
-}
-
-set_directory_permissions() {
-    local target_dir="$1"
-    
-    log_info "Setting appropriate permissions for: $target_dir"
-    
-    # Set directory permissions (owner: rwx, group: rwx, others: r-x)
-    find "$target_dir" -type d -exec chmod 755 {} + 2>/dev/null || {
-        log_warn "Could not set directory permissions (continuing anyway)"
-    }
-    
-    # Set file permissions (owner: rw-, group: rw-, others: r--)
-    find "$target_dir" -type f -exec chmod 644 {} + 2>/dev/null || {
-        log_warn "Could not set file permissions (continuing anyway)"
-    }
-    
-    log_info "Permissions updated"
-}
-
-run_conversion() {
-    local md_file="$1"
-    local git_repo_basedir="$2"
-    local md_dir="$3"
-    local format_flag="$4"
-    local convert_flag="$5"
-    
-    log_info "Starting conversion process..."
-    log_info "  Markdown file: $md_file"
-    log_info "  Repository base: $git_repo_basedir"
-    log_info "  Working directory: $md_dir"
-    log_info "  Format markdown: $format_flag"
-    log_info "  Convert to HTML: $convert_flag"
-    
-    # Validate Python script exists
-    validate_file_exists "$PYTHON_SCRIPT" "Python conversion script" || return 1
-    
-    # Build command arguments
-    local cmd_args=("$md_file" "$git_repo_basedir" "$md_dir")
-    
-    if [[ "$format_flag" == "true" ]]; then
-        cmd_args+=("--md-format")
-    fi
-    
-    if [[ "$convert_flag" == "true" ]]; then
-        cmd_args+=("--md-to-html")
-    fi
-    
-    # Add verbose logging in debug mode
-    if [[ "${DEBUG:-false}" == "true" ]]; then
-        cmd_args+=("--log-level" "DEBUG")
-    fi
-    
-    # Execute Python script
-    log_info "Executing Python conversion script..."
-    python3 "$PYTHON_SCRIPT" "${cmd_args[@]}" || {
-        log_error "Python conversion script failed"
-        return 1
-    }
-    
-    log_success "Conversion completed successfully"
-    return 0
-}
-
-# ============================================================================
-# MAIN EXECUTION FLOW
-# ============================================================================
-
-main() {
-    local sync_path=""
-    local format_markdown="false"
-    local convert_to_html="false"
-    
-    # Parse command line arguments
-    while [[ $# -gt 0 ]]; do
-        case $1 in
-            --sync-path)
-                sync_path="$2"
-                shift 2
-                ;;
-            --md-format)
-                format_markdown="true"
-                shift
-                ;;
-            --md-to-html)
-                convert_to_html="true"
-                shift
-                ;;
-            --debug)
-                export DEBUG="true"
-                shift
-                ;;
-            --help|-h)
-                show_usage
-                exit 0
-                ;;
-            *)
-                # Positional arguments for backward compatibility
-                if [[ -z "$sync_path" ]]; then
-                    sync_path="$1"
-                elif [[ "$1" == "--md-format" ]]; then
-                    format_markdown="true"
-                elif [[ "$1" == "--md-to-html" ]]; then
-                    convert_to_html="true"
-                fi
-                shift
-                ;;
-        esac
-    done
-    
-    # Use environment variable if not provided via command line
-    if [[ -z "$sync_path" && -n "${SYNC_PATH:-}" ]]; then
-        sync_path="$SYNC_PATH"
-    fi
-    
-    # Validate required parameters
-    if [[ -z "$sync_path" ]]; then
-        log_error "SYNC_PATH not provided. Use --sync-path argument or set SYNC_PATH environment variable"
-        show_usage
-        exit 1
-    fi
-    
-    # Default behavior: both format and convert
-    if [[ "$format_markdown" == "false" && "$convert_to_html" == "false" ]]; then
-        format_markdown="true"
-        convert_to_html="true"
-    fi
-    
-    log_info "Starting Enterprise Markdown to HTML Converter"
-    log_info "Repository root: $REPO_ROOT"
-    log_info "Sync path: $sync_path"
-    
-    # Sanitize and validate paths
-    local md_dir
-    md_dir=$(sanitize_path "$sync_path")
-    validate_directory_exists "$md_dir" "Target directory" || exit 1
-    
-    local git_repo_basedir
-    git_repo_basedir=$(sanitize_path "$REPO_ROOT")
-    validate_directory_exists "$git_repo_basedir" "Repository base directory" || exit 1
-    
-    # Set appropriate permissions
-    set_directory_permissions "$md_dir"
-    
-    # Find markdown file
-    local md_file
-    md_file=$(find_markdown_file "$md_dir") || exit 1
-    
-    # Validate markdown file
-    validate_file_exists "$md_file" "Markdown file" || exit 1
-    
-    # Check system dependencies
-    check_system_dependencies || exit 1
-    
-    # Setup Python environment
-    setup_python_environment || exit 1
-    
-    # Install Prettier if needed and available
-    if [[ "$format_markdown" == "true" ]]; then
-        install_prettier
-    fi
-    
-    # Run the conversion
-    run_conversion "$md_file" "$git_repo_basedir" "$md_dir" "$format_markdown" "$convert_to_html" || exit 1
-    
-    log_success "All operations completed successfully"
-}
-
-show_usage() {
-    cat << EOF
-Enterprise Markdown to HTML Converter
-
-USAGE:
-    $0 [OPTIONS]
-
-OPTIONS:
-    --sync-path PATH     Path to directory containing markdown file
-    --md-format          Format markdown file using Prettier
-    --md-to-html         Convert markdown to HTML
-    --debug              Enable debug logging
-    --help, -h           Show this help message
-
-ENVIRONMENT VARIABLES:
-    SYNC_PATH           Alternative way to specify sync path
-
-EXAMPLES:
-    # Convert and format (default behavior)
-    $0 --sync-path "ndr/v6.0/psd01"
-    
-    # Only format markdown
-    $0 --sync-path "ndr/v6.0/psd01" --md-format
-    
-    # Only convert to HTML
-    $0 --sync-path "ndr/v6.0/psd01" --md-to-html
-    
-    # Use environment variable
-    export SYNC_PATH="ndr/v6.0/psd01"
-    $0 --md-format --md-to-html
-
-EOF
-}
-
-# ============================================================================
-# SCRIPT ENTRY POINT
-# ============================================================================
-
-# Set up signal handlers for cleanup
-trap cleanup EXIT
-trap 'log_error "Script interrupted by user"; exit 130' INT TERM
-
-# Initialize logging
-echo "# Enterprise Markdown Converter - $(date)" > "$LOGFILE"
-
-# Execute main function
-main "$@"
+          if [[ "${{ job.status }}" != "success" ]]; then
+            echo "### ❌ Conversion failed" >> $GITHUB_STEP_SUMMARY
+            echo "Review the workflow logs for details." >> $GITHUB_STEP_SUMMARY
+          fi
