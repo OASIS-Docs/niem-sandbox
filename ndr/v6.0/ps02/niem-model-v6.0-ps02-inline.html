@@ -1,13 +1,9 @@
 <!DOCTYPE html>
-
 <html lang="" xml:lang="" xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta charset="utf-8"/>
 <meta content="pandoc" name="generator"/>
 <meta content="width=device-width, initial-scale=1.0, user-scalable=yes" name="viewport"/>
-<title>NIEM Model Version 6.0</title>
-
-<link href="/home/runner/work/niem-sandbox/niem-sandbox/ndr/v6.0/ps02/styles/markdown-styles-v1.8.1-cn_final.css" rel="stylesheet"/>
 <link href="styles/markdown-styles-v1.8.1-cn_final.css" rel="stylesheet"/><!-- BEGIN INLINE CSS -->
 
 <style>
@@ -146,9 +142,8 @@ blockquote {
 
 <!-- END INLINE CSS -->
 </head>
-<body><img alt="NIEM Logo" src="images/NIEM-NO-Logo-v5.png" style="max-width: 400px;/>
-<header id="title-block-header">
-</header>
+<body><img alt="NIEM Logo" src="images/NIEM-NO-Logo-v5.png" style="max-width: 350px;/&gt;
+&lt;header id=" title-block-header=""/>
 <h1 id="niem-model-version-6.0">NIEM Model Version 6.0</h1>
 <h2 id="project-specification-02">Project Specification 02</h2>
 <h2 id="march-2025">26 March 2025</h2>
@@ -323,16 +318,16 @@ History</a></li>
 <li><a href="#appendix-d-notices">Appendix D. Notices</a></li>
 </ul>
 <hr/>
-<h1 id="introduction">1 Introduction</h1>
+<h1 id="1-introduction">1 Introduction</h1>
 <p>The NIEM model is a data model made up of a collection of properties
 and types defined within a set of namespaces, organized by governance
 authority. NIEM components can be leveraged as reusable building blocks
 in information exchanges, providing consistency and well-defined
 semantics that support interoperability among various exchange
 partners.</p>
-<h2 id="changes-from-earlier-versions">1.1 Changes from earlier
+<h2 id="11-changes-from-earlier-versions">1.1 Changes from earlier
 versions</h2>
-<h3 id="changes-from-5.2">1.1.1 Changes from 5.2</h3>
+<h3 id="111-changes-from-52">1.1.1 Changes from 5.2</h3>
 <p>Significant changes to the NIEM model in version 6.0 from previous
 version 5.2 include:</p>
 <ul>
@@ -414,7 +409,7 @@ annotation documentation blocks</li>
 <li>Updated NCIC local terminology definition</li>
 <li>Updated the specification document</li>
 </ul>
-<h2 id="glossary">1.2 Glossary</h2>
+<h2 id="12-glossary">1.2 Glossary</h2>
 <h3 id="definitions-of-terms">1.2.1 Definitions of terms</h3>
 <table>
 <colgroup>
@@ -435,7 +430,7 @@ managed by the NTAC which governs the architecture of the model.</td>
 </tr>
 </tbody>
 </table>
-<h3 id="acronyms-and-abbreviations">1.2.2 Acronyms and
+<h3 id="122-acronyms-and-abbreviations">1.2.2 Acronyms and
 abbreviations</h3>
 <table>
 <thead>
@@ -476,20 +471,20 @@ abbreviations</h3>
 </tbody>
 </table>
 <hr/>
-<h1 id="the-niem-model">2 The NIEM Model</h1>
-<h2 id="content">2.1 Content</h2>
+<h1 id="2-the-niem-model">2 The NIEM Model</h1>
+<h2 id="21-content">2.1 Content</h2>
 <p>Properties and types in NIEM are defined in namespaces, which are
 organized by governance or authoritative source:</p>
-<h3 id="niem-core">2.1.1 NIEM Core</h3>
+<h3 id="211-niem-core">2.1.1 NIEM Core</h3>
 <p>NIEM Core is the collection of general-purpose content that does not
 belong to any one authoritative source. As such, this content is managed
 collaboratively by the NBAC, which includes representatives from the
 NIEM domain subcommittees.</p>
-<h3 id="domains">2.1.2 Domains</h3>
+<h3 id="212-domains">2.1.2 Domains</h3>
 <p>NIEM domains are namespaces for communities of interest that have
 stood up their own formal governance bodies as NBAC subcommittees within
 NIEM.</p>
-<h3 id="codes">2.1.3 Codes</h3>
+<h3 id="213-codes">2.1.3 Codes</h3>
 <p>While code sets can be defined in NIEM Core, domains, and other
 namespaces, code namespaces are almost exclusively comprised of code
 sets. Some NIEM code namespaces are actively managed by domain
@@ -497,24 +492,24 @@ subcommittees or authoritative sources which work directly with NIEM.
 Other NIEM code namespaces are managed by the NBAC or domain
 subcommittees and reflect publicly available code sources, modified to
 conform to NIEM NDR rules.</p>
-<h3 id="adapters">2.1.4 Adapters</h3>
+<h3 id="214-adapters">2.1.4 Adapters</h3>
 <p>Adapters are provided by the NDR as the mechanism to support
 non-conformant external standards in NIEM schemas and instances without
 triggering conformance violations. Like code sets, while adapters can be
 defined in other namespaces, adapter namespaces are for namespaces that
 exclusively define adapters for external standards.</p>
-<h3 id="auxiliary">2.1.5 Auxiliary</h3>
+<h3 id="215-auxiliary">2.1.5 Auxiliary</h3>
 <p>Auxiliary namespaces define content representing communities of
 interest or standards. Unlike domains, they do not require formal
 governance bodies within NIEM.</p>
-<h3 id="external">2.1.6 External</h3>
+<h3 id="216-external">2.1.6 External</h3>
 <p>External namespaces in NIEM are non-conformant external standards.
 These are provided for when the use of other standards defined outside
 of NIEM would provide greater interoperability than to create
 NIEM-conformant components representing those standards. Properties from
 external standards are wrapped by NIEM adapter types, which prevent NDR
 conformance rules from triggering errors on their use.</p>
-<h3 id="utility">2.1.7 Utility</h3>
+<h3 id="217-utility">2.1.7 Utility</h3>
 <p>Utility namespaces in NIEM provide architectures support from the NDR
 and other NIEM technical specifications. They provide mechanisms to
 support such things as ids and references, linked data, IC-ISM and NTK
@@ -555,7 +550,7 @@ to support other languages as well.</p>
 NDR. The architecture of the NIEM Model v6.0 is defined by
 [NIEM-NDR-v6.0].</p>
 <hr/>
-<h1 id="conformance">3 Conformance</h1>
+<h1 id="3-conformance">3 Conformance</h1>
 <p>This specification normatively defines NIEM Model Version 6.0 with a
 set of reference XML Schema documents. An implementation uses the model
 to partly define the messages it produces in terms of model components.
@@ -607,8 +602,8 @@ generated, would conform.)</p></li>
 targets, Schematron and text rules, and guidance for the conformant use
 of NIEM in messages and message specifications.</p>
 <hr/>
-<h1 id="appendix-a.-references">Appendix A. References</h1>
-<h2 id="a.1-normative-references">A.1 Normative References</h2>
+<h1 id="appendix-a-references">Appendix A. References</h1>
+<h2 id="a1-normative-references">A.1 Normative References</h2>
 <h6 id="niem-ndr-v6.0">[NIEM-NDR-v6.0]</h6>
 <p><em>NIEM Naming and Design Rules (NDR) Version 6.0</em>. Edited by
 Scott Renner. 27 January 2025. OASIS Project Specification Draft 01. <a href="https://docs.oasis-open.org/niemopen/ndr/v6.0/psd01/ndr-v6.0-psd01.html">https://docs.oasis-open.org/niemopen/ndr/v6.0/psd01/ndr-v6.0-psd01.html</a><a class="uri" href="https://docs.oasis-open.org/niemopen/ndr/v6.0/psd01/ndr-v6.0-psd01.html"></a>.
@@ -622,7 +617,7 @@ Words”, BCP 14, RFC 8174, DOI 10.17487/RFC8174, May 2017, <a href="http://www.
 <h2 id="a.2-informative-references">A.2 Informative References</h2>
 <hr/>
 <h1 id="appendix-b.-acknowledgments">Appendix B. Acknowledgments</h1>
-<h2 id="b.1-special-thanks">B.1 Special Thanks</h2>
+<h2 id="b1-special-thanks">B.1 Special Thanks</h2>
 <p>Substantial contributions to this document from the following
 individuals are gratefully acknowledged:</p>
 <ul>
@@ -833,7 +828,7 @@ model:</p>
 </tr>
 </tbody>
 </table>
-<h2 id="b.2-participants">B.2 Participants</h2>
+<h2 id="b2-participants">B.2 Participants</h2>
 <p>The following individuals have participated in the creation of this
 specification and are gratefully acknowledged:</p>
 <p><strong>NBAC Members:</strong></p>
@@ -1143,7 +1138,7 @@ been made:</p>
 </tbody>
 </table>
 <hr/>
-<h1 id="appendix-d.-notices">Appendix D. Notices</h1>
+<h1 id="appendix-d-notices">Appendix D. Notices</h1>
 <p>Copyright © OASIS Open 2023. All Rights Reserved.</p>
 <p>All capitalized terms in the following text have the meanings
 assigned to them in the OASIS Intellectual Property Rights Policy (the
