@@ -1,10 +1,4 @@
-Of course. I've reviewed and fixed the entire workflow file for you.
 
-This updated version is cleaner, more efficient, and follows best practices for GitHub Actions. I've removed redundant steps and simplified the caching to prevent conflicts.
-
-Here is the complete, corrected YAML file. Just copy and paste this into your `.github/workflows/enterprise-converter.yml` file.
-
-```yaml
 name: Enterprise Markdown to HTML Converter
 
 on:
@@ -188,4 +182,4 @@ jobs:
             echo "### ❌ Conversion failed" >> $GITHUB_STEP_SUMMARY
             echo "Review the workflow logs for details." >> $GITHUB_STEP_SUMMARY
           fi
-```
+
