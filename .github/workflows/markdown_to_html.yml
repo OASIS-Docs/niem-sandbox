@@ -35,9 +35,31 @@ permissions:
   contents: write
 
 jobs:
+  display-last-run-info:
+    name: Display Last Run Info
+    runs-on: ubuntu-latest
+    steps:
+      - name: Show previous inputs
+        run: |
+          if [ -f .github/workflow-data/last-run.json ]; then
+            python3 - <<'PY' >> $GITHUB_STEP_SUMMARY
+import json
+with open('.github/workflow-data/last-run.json') as f:
+    data = json.load(f)
+print('## Previous Run')
+print(f"- sync_path: `{data.get('inputs', {}).get('sync_path', 'n/a')}`")
+print(f"- operation_mode: `{data.get('inputs', {}).get('operation_mode', 'n/a')}`")
+print(f"- outcome: {data.get('outcome', 'unknown')}")
+print(f"- timestamp: {data.get('timestamp', 'n/a')}")
+PY
+          else
+            echo "No prior run information found." >> $GITHUB_STEP_SUMMARY
+          fi
+
   build:
     name: Format / Convert / PDF
     runs-on: ubuntu-latest
+    needs: display-last-run-info
 
     outputs:
       html_generated: ${{ steps.convert_html.outcome == 'success' && 'true' || 'false' }}
@@ -93,7 +115,7 @@ jobs:
           cache: 'npm'
 
       - name: Cache pip cache explicitly (fallback)
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ~/.cache/pip
           key: ${{ runner.os }}-pip-${{ hashFiles('.github/src/requirements.txt') }}
@@ -227,4 +249,38 @@ jobs:
           echo "| HTML Generated | ${{ steps.convert_html.outcome }} |" >> $GITHUB_STEP_SUMMARY
           if [[ "${{ env.OP_MODE }}" == "format_convert_pdf" ]]; then
             echo "| PDF Generated | \`${{ steps.generate_pdf.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
+          fi
+
+  save-run-parameters:
+    name: Save Run Parameters
+    needs: build
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Record run inputs
+        env:
+          INPUTS_JSON: ${{ toJson(github.event.inputs) }}
+          RESULT: ${{ needs.build.result }}
+        run: |
+          mkdir -p .github/workflow-data
+          python3 - <<'PY'
+import json, os, datetime, pathlib
+data = {
+    'inputs': json.loads(os.environ.get('INPUTS_JSON', '{}')),
+    'outcome': os.environ.get('RESULT', 'unknown'),
+    'timestamp': datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')
+}
+path = pathlib.Path('.github/workflow-data/last-run.json')
+path.write_text(json.dumps(data, indent=2))
+PY
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git add .github/workflow-data/last-run.json
+          if git diff --cached --quiet; then
+            echo "No run data changes"
+          else
+            git commit -m "chore: record last workflow inputs"
+            git push
           fi

@@ -2,11 +2,14 @@ import os
 import subprocess
 import argparse
 import logging
-from bs4 import BeautifulSoup
 import re
+from pathlib import Path
 from urllib.parse import urlparse
+from typing import Optional
+
 import requests
 from requests.exceptions import RequestException
+from bs4 import BeautifulSoup
 import shutil
 
 # Configure logging to capture detailed debug information
@@ -19,19 +22,126 @@ logging.basicConfig(
     ]
 )
 
-def sanitize_file_path(file_path):
-    """
-    Sanitize the file path by removing newlines and trimming whitespace.
 
-    Args:
-        file_path (str): The original file path.
+class PathUtils:
+    """Utility helpers for working with file system paths."""
 
-    Returns:
-        str: The sanitized file path.
-    """
-    sanitized = os.path.normpath(file_path.strip().replace('\n', ''))
-    logging.debug(f"Sanitized file path: Original='{file_path}' | Sanitized='{sanitized}'")
-    return sanitized
+    @staticmethod
+    def sanitize(path: str) -> str:
+        """Return a normalized, newline-free path."""
+        sanitized = os.path.normpath(path.strip().replace("\n", ""))
+        logging.debug("Sanitized path '%s' -> '%s'", path, sanitized)
+        return sanitized
+
+
+class PandocRunner:
+    """Run pandoc to convert Markdown into HTML."""
+
+    def __init__(self, logger: logging.Logger) -> None:
+        self.logger = logger
+
+    def convert(self, md_file: str, temp_output: str, css_path: str, title: str) -> str:
+        """Execute pandoc and return the path to the generated HTML."""
+        command = [
+            "pandoc",
+            md_file,
+            "-f",
+            "markdown+autolink_bare_uris+hard_line_breaks",
+            "-c",
+            css_path,
+            "-s",
+            "-o",
+            temp_output,
+            "--metadata",
+            f"title={title}",
+        ]
+        self.logger.debug("Running pandoc: %s", " ".join(command))
+        subprocess.run(command, check=True)
+        return temp_output
+
+
+class ImageProcessor:
+    """Download and rewrite image references inside HTML."""
+
+    def __init__(self, images_dir: str, logger: logging.Logger) -> None:
+        self.images_dir = images_dir
+        self.logger = logger
+
+    def process(self, soup: BeautifulSoup) -> None:
+        """Download external images and adjust src attributes."""
+        for img in soup.find_all("img"):
+            src = img.get("src", "")
+            parsed = urlparse(src)
+            if parsed.scheme in ("http", "https"):
+                filename = os.path.basename(parsed.path)
+                local_path = os.path.join(self.images_dir, filename)
+                if not os.path.exists(local_path):
+                    try:
+                        self.logger.info("Downloading image %s", src)
+                        resp = requests.get(src, timeout=10)
+                        resp.raise_for_status()
+                        with open(local_path, "wb") as f:
+                            f.write(resp.content)
+                    except RequestException as exc:
+                        self.logger.error("Failed downloading %s: %s", src, exc)
+                        img.decompose()
+                        continue
+                img["src"] = os.path.join(MarkdownToHtmlConverter.IMAGES_SUBDIR, filename)
+
+
+class HtmlFinalizer:
+    """Post process HTML produced by pandoc."""
+
+    def __init__(self, css_filename: str, images_dir: str, logger: logging.Logger) -> None:
+        self.css_filename = css_filename
+        self.images_dir = images_dir
+        self.logger = logger
+        self.image_processor = ImageProcessor(images_dir, logger)
+
+    def _convert_urls(self, soup: BeautifulSoup) -> None:
+        url_regex = re.compile(r"(https?://\S+)")
+        for text_node in soup.find_all(string=url_regex):
+            new_content = []
+            last_index = 0
+            for match in url_regex.finditer(text_node):
+                start, end = match.span()
+                url = match.group(1)
+                new_content.append(text_node[last_index:start])
+                a_tag = soup.new_tag("a", href=url)
+                a_tag.string = url
+                new_content.append(a_tag)
+                last_index = end
+            new_content.append(text_node[last_index:])
+            parent = text_node.parent
+            for elem in new_content:
+                parent.insert_before(elem)
+            text_node.extract()
+
+    def finalize(self, html_path: str, output_file: str, meta_description: str) -> None:
+        """Finalize HTML by downloading images, injecting CSS and meta tags."""
+        with open(html_path, "r", encoding="utf-8") as fh:
+            html_content = fh.read()
+
+        soup = BeautifulSoup(html_content, "html.parser")
+
+        if meta_description and meta_description != "-":
+            meta_tag = soup.new_tag("meta", attrs={"name": "description", "content": meta_description})
+            soup.head.insert(0, meta_tag)
+
+        self._convert_urls(soup)
+        self.image_processor.process(soup)
+
+        link_tag = soup.new_tag(
+            "link",
+            rel="stylesheet",
+            href=os.path.join(MarkdownToHtmlConverter.STYLES_SUBDIR, self.css_filename),
+        )
+        soup.head.append(link_tag)
+
+        with open(output_file, "w", encoding="utf-8") as fh:
+            fh.write(str(soup))
+
+        os.remove(html_path)
 
 class MarkdownToHtmlConverter:
     """
@@ -43,6 +153,7 @@ class MarkdownToHtmlConverter:
     STYLE_CSS_URL = 'https://docs.oasis-open.org/templates/css/markdown-styles-v1.8.1-cn_final.css'
     LOGO_IMG_TAG = '<img alt="OASIS Logo" src="https://docs.oasis-open.org/templates/OASISLogo-v3.0.png"/>'
     IMAGES_SUBDIR = 'images'
+    STYLES_SUBDIR = 'styles'
 
     def __init__(self, md_file, output_file, git_repo_basedir=None, md_dir=None, styles_dir='styles'):
         """
@@ -56,11 +167,11 @@ class MarkdownToHtmlConverter:
             styles_dir (str, optional): Directory where stylesheets are stored.
         """
         # Sanitize and store file paths
-        self.md_file = sanitize_file_path(md_file)
-        self.output_file = sanitize_file_path(output_file)
-        self.git_repo_basedir = sanitize_file_path(git_repo_basedir) if git_repo_basedir else None
-        self.md_dir = sanitize_file_path(md_dir) if md_dir else None
-        self.styles_dir = sanitize_file_path(styles_dir)
+        self.md_file = PathUtils.sanitize(md_file)
+        self.output_file = PathUtils.sanitize(output_file)
+        self.git_repo_basedir = PathUtils.sanitize(git_repo_basedir) if git_repo_basedir else None
+        self.md_dir = PathUtils.sanitize(md_dir) if md_dir else None
+        self.styles_dir = PathUtils.sanitize(styles_dir)
 
         logging.info("Initialized MarkdownToHtmlConverter with:")
         logging.info(f"  Markdown File: {self.md_file}")
@@ -85,6 +196,11 @@ class MarkdownToHtmlConverter:
 
         # Ensure the CSS file is present
         self.ensure_stylesheet()
+
+        # Initialize helper classes
+        self.logger = logging.getLogger(__name__)
+        self.pandoc = PandocRunner(self.logger)
+        self.finalizer = HtmlFinalizer(self.STYLE_CSS_FILENAME, self.images_dir, self.logger)
 
     def ensure_stylesheet(self):
         """
@@ -505,38 +621,22 @@ class MarkdownToHtmlConverter:
         """
         Converts the Markdown file to HTML with post-processing.
         """
+
         temp_output = os.path.join(os.path.dirname(self.output_file), 'temp_output.html')
         try:
             logging.info("Starting Markdown to HTML conversion process.")
-
-            # Step 1: Ensure the TOC title is added (if necessary)
             self.ensure_toc_title()
-
-            # Step 2: Run Prettier to format the Markdown file (if required)
-            # This can be controlled externally via arguments; already handled in main
-
-            # Step 3: Run Pandoc to convert Markdown to HTML
-            self.run_pandoc()
-
-            # Step 4: Read the generated HTML content from the temporary file
-            html_content = self.read_file(temp_output)
-
-            # Step 5: Post-process the HTML content (embedding CSS, handling images, etc.)
-            final_html = self.post_process_html(html_content)
-
-            # Step 6: Write the final processed HTML to the output file
-            self.write_file(self.output_file, final_html)
-            logging.info(f"HTML conversion and post-processing completed successfully. Output file: {self.output_file}")
-
+            css_path = os.path.abspath(os.path.join(self.styles_path, self.STYLE_CSS_FILENAME))
+            self.pandoc.convert(self.md_file, temp_output, css_path, self.html_title)
+            self.finalizer.finalize(temp_output, self.output_file, self.meta_description)
+            logging.info("HTML conversion and post-processing completed successfully. Output file: %s", self.output_file)
         except Exception as e:
             logging.error(f"An error occurred during conversion: {e}")
             raise
         finally:
-            # Ensure the temporary file is deleted to clean up
             if os.path.exists(temp_output):
                 os.remove(temp_output)
-                logging.debug(f"Temporary file {temp_output} deleted.")
-
+                logging.debug("Temporary file %s deleted.", temp_output)
 def main():
     """
     The main entry point of the script.
@@ -564,9 +664,9 @@ def main():
         logging.info(f"Output File: {output_file}")
     else:
         # Use paths from arguments
-        git_repo_basedir = sanitize_file_path(args.git_repo_basedir)
-        md_dir = sanitize_file_path(args.md_dir)
-        md_file = sanitize_file_path(args.md_file)
+        git_repo_basedir = PathUtils.sanitize(args.git_repo_basedir)
+        md_dir = PathUtils.sanitize(args.md_dir)
+        md_file = PathUtils.sanitize(args.md_file)
         output_file = os.path.join(md_dir, os.path.basename(md_file).replace('.md', '.html'))
         logging.info("Running in normal mode with provided arguments.")
         logging.info(f"Markdown File: {md_file}")
