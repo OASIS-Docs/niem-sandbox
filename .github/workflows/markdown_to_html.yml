@@ -1,0 +1,415 @@
+name: Enterprise Markdown to HTML Converter
+
+on:
+  workflow_dispatch:
+    inputs:
+      sync_path:
+        description: |
+          Path to the directory containing the markdown file to convert.
+          Example: ndr/v6.0/psd01
+          Ensure the path is correctly formatted and exists in the repository.
+        required: true
+        type: string
+        default: 'ndr/v6.0/psd01'
+      
+      operation_mode:
+        description: 'Select conversion operation'
+        required: true
+        type: choice
+        default: 'format_and_convert'
+        options:
+          - 'format_and_convert'
+          - 'format_only'
+          - 'convert_only'
+          - 'validate_only'
+      
+      enable_debug:
+        description: 'Enable debug logging for troubleshooting'
+        required: false
+        type: boolean
+        default: false
+      
+      force_download_assets:
+        description: 'Force re-download of external assets (stylesheets, images)'
+        required: false
+        type: boolean
+        default: false
+
+env:
+  # Performance and reliability settings
+  PYTHONUNBUFFERED: '1'
+  PYTHONDONTWRITEBYTECODE: '1'
+  PIP_DISABLE_PIP_VERSION_CHECK: '1'
+  PIP_NO_CACHE_DIR: '1'
+
+jobs:
+  validate-inputs:
+    name: Validate Inputs
+    runs-on: ubuntu-latest
+    outputs:
+      sync_path: ${{ steps.validate.outputs.sync_path }}
+      md_format_flag: ${{ steps.validate.outputs.md_format_flag }}
+      md_convert_flag: ${{ steps.validate.outputs.md_convert_flag }}
+      debug_flag: ${{ steps.validate.outputs.debug_flag }}
+    
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      
+      - name: Validate and Process Inputs
+        id: validate
+        run: |
+          set -euo pipefail
+          
+          # Validate sync_path
+          SYNC_PATH="${{ github.event.inputs.sync_path }}"
+          echo "Validating sync path: $SYNC_PATH"
+          
+          if [[ -z "$SYNC_PATH" ]]; then
+            echo "::error::SYNC_PATH cannot be empty"
+            exit 1
+          fi
+          
+          # Sanitize path
+          SYNC_PATH=$(echo "$SYNC_PATH" | tr -d '\n\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+          
+          if [[ ! -d "$SYNC_PATH" ]]; then
+            echo "::error::Directory does not exist: $SYNC_PATH"
+            echo "Available directories:"
+            find . -type d -name "*" | head -20
+            exit 1
+          fi
+          
+          # Check for markdown files
+          MD_COUNT=$(find "$SYNC_PATH" -maxdepth 1 -name "*.md" | wc -l)
+          if [[ $MD_COUNT -eq 0 ]]; then
+            echo "::error::No markdown files found in: $SYNC_PATH"
+            echo "Files in directory:"
+            ls -la "$SYNC_PATH" || true
+            exit 1
+          fi
+          
+          echo "Found $MD_COUNT markdown file(s) in $SYNC_PATH"
+          
+          # Set operation flags
+          OPERATION_MODE="${{ github.event.inputs.operation_mode }}"
+          case "$OPERATION_MODE" in
+            "format_and_convert")
+              MD_FORMAT_FLAG="--md-format"
+              MD_CONVERT_FLAG="--md-to-html"
+              ;;
+            "format_only")
+              MD_FORMAT_FLAG="--md-format"
+              MD_CONVERT_FLAG=""
+              ;;
+            "convert_only")
+              MD_FORMAT_FLAG=""
+              MD_CONVERT_FLAG="--md-to-html"
+              ;;
+            "validate_only")
+              MD_FORMAT_FLAG=""
+              MD_CONVERT_FLAG=""
+              ;;
+            *)
+              echo "::error::Invalid operation mode: $OPERATION_MODE"
+              exit 1
+              ;;
+          esac
+          
+          # Set debug flag
+          DEBUG_FLAG=""
+          if [[ "${{ github.event.inputs.enable_debug }}" == "true" ]]; then
+            DEBUG_FLAG="--debug"
+          fi
+          
+          # Output variables
+          echo "sync_path=$SYNC_PATH" >> $GITHUB_OUTPUT
+          echo "md_format_flag=$MD_FORMAT_FLAG" >> $GITHUB_OUTPUT
+          echo "md_convert_flag=$MD_CONVERT_FLAG" >> $GITHUB_OUTPUT
+          echo "debug_flag=$DEBUG_FLAG" >> $GITHUB_OUTPUT
+          
+          echo "::notice::Validation completed successfully"
+          echo "::notice::Sync Path: $SYNC_PATH"
+          echo "::notice::Operation: $OPERATION_MODE"
+
+  setup-environment:
+    name: Setup Build Environment
+    runs-on: ubuntu-latest
+    needs: validate-inputs
+    
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+        
+      - name: Install System Dependencies
+        run: |
+          set -euo pipefail
+          echo "::group::Installing system packages"
+          
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            pandoc \
+            bc \
+            jq \
+            curl \
+            wget
+          
+          echo "::endgroup::"
+          
+          echo "::group::Verifying installations"
+          pandoc --version
+          bc --version
+          python3 --version
+          node --version
+          echo "::endgroup::"
+      
+      - name: Install Node.js Dependencies
+        run: |
+          echo "::group::Installing Prettier"
+          npm install -g prettier@latest
+          prettier --version
+          echo "::endgroup::"
+      
+      - name: Cache Python Dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt', '.github/src/*.py') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+      
+      - name: Verify Environment
+        run: |
+          echo "::group::Environment verification"
+          echo "Python location: $(which python3)"
+          echo "Pip location: $(which pip)"
+          echo "Prettier location: $(which prettier)"
+          echo "Pandoc location: $(which pandoc)"
+          echo "::endgroup::"
+
+  convert-markdown:
+    name: Convert Markdown to HTML
+    runs-on: ubuntu-latest
+    needs: [validate-inputs, setup-environment]
+    permissions:
+      contents: write
+      actions: write
+    
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      
+      - name: Install Dependencies
+        run: |
+          set -euo pipefail
+          
+          # System dependencies
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends pandoc bc
+          
+          # Node.js dependencies
+          npm install -g prettier@latest
+          
+          echo "::notice::All dependencies installed successfully"
+      
+      - name: Configure Git
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          git config --global init.defaultBranch main
+      
+      - name: Execute Conversion Script
+        id: convert
+        env:
+          SYNC_PATH: ${{ needs.validate-inputs.outputs.sync_path }}
+          FORCE_DOWNLOAD: ${{ github.event.inputs.force_download_assets }}
+        run: |
+          set -euo pipefail
+          
+          echo "::group::Conversion execution"
+          
+          # Make scripts executable
+          chmod +x .github/scripts/step_1_format_md_and_convert_to_html_v3_0.sh
+          
+          # Build command arguments
+          SCRIPT_ARGS=(
+            "--sync-path" "$SYNC_PATH"
+            ${{ needs.validate-inputs.outputs.md_format_flag }}
+            ${{ needs.validate-inputs.outputs.md_convert_flag }}
+            ${{ needs.validate-inputs.outputs.debug_flag }}
+          )
+          
+          echo "Executing: .github/scripts/step_1_format_md_and_convert_to_html_v3_0.sh ${SCRIPT_ARGS[*]}"
+          
+          # Execute the conversion script
+          ./.github/scripts/step_1_format_md_and_convert_to_html_v3_0.sh "${SCRIPT_ARGS[@]}"
+          
+          echo "conversion_completed=true" >> $GITHUB_OUTPUT
+          echo "::endgroup::"
+          
+          echo "::notice::Conversion completed successfully"
+      
+      - name: Generate Conversion Report
+        if: steps.convert.outputs.conversion_completed == 'true'
+        run: |
+          echo "::group::Generating conversion report"
+          
+          SYNC_PATH="${{ needs.validate-inputs.outputs.sync_path }}"
+          
+          # Find generated files
+          echo "Generated files in $SYNC_PATH:"
+          find "$SYNC_PATH" -type f \( -name "*.html" -o -name "*.css" \) -newer .git/HEAD | while read -r file; do
+            echo "  - $file ($(stat -c%s "$file") bytes)"
+          done
+          
+          # Check log file
+          if [[ -f "conversion.log" ]]; then
+            echo "::group::Conversion log summary"
+            tail -20 conversion.log
+            echo "::endgroup::"
+          fi
+          
+          echo "::endgroup::"
+      
+      - name: Validate Generated Files
+        if: contains(github.event.inputs.operation_mode, 'convert')
+        run: |
+          echo "::group::Validating generated HTML"
+          
+          SYNC_PATH="${{ needs.validate-inputs.outputs.sync_path }}"
+          
+          # Find HTML files
+          HTML_FILES=$(find "$SYNC_PATH" -name "*.html" -type f)
+          
+          if [[ -z "$HTML_FILES" ]]; then
+            echo "::error::No HTML files generated"
+            exit 1
+          fi
+          
+          # Basic HTML validation
+          echo "$HTML_FILES" | while read -r html_file; do
+            if [[ -f "$html_file" ]]; then
+              SIZE=$(stat -c%s "$html_file")
+              if [[ $SIZE -lt 100 ]]; then
+                echo "::warning::Generated HTML file seems too small: $html_file ($SIZE bytes)"
+              else
+                echo "::notice::Generated HTML file: $html_file ($SIZE bytes)"
+              fi
+              
+              # Check for basic HTML structure
+              if grep -q "<html" "$html_file" && grep -q "</html>" "$html_file"; then
+                echo "::notice::HTML structure validation passed for: $html_file"
+              else
+                echo "::warning::HTML structure validation failed for: $html_file"
+              fi
+            fi
+          done
+          
+          echo "::endgroup::"
+      
+      - name: Commit and Push Changes
+        if: steps.convert.outputs.conversion_completed == 'true'
+        run: |
+          set -euo pipefail
+          
+          echo "::group::Committing changes"
+          
+          SYNC_PATH="${{ needs.validate-inputs.outputs.sync_path }}"
+          
+          # Stage all changes in the sync path
+          git add -A "$SYNC_PATH/"
+          
+          # Also add any global changes (like stylesheets)
+          git add -A "styles/" 2>/dev/null || true
+          git add -A ".github/" 2>/dev/null || true
+          
+          # Check if there are changes to commit
+          if git diff --cached --quiet; then
+            echo "::notice::No changes to commit"
+          else
+            # Create detailed commit message
+            OPERATION_MODE="${{ github.event.inputs.operation_mode }}"
+            COMMIT_MESSAGE="🚀 Enterprise conversion: $OPERATION_MODE for $SYNC_PATH
+            
+            - Operation: $OPERATION_MODE
+            - Path: $SYNC_PATH  
+            - Timestamp: $(date -u '+%Y-%m-%d %H:%M:%S UTC')
+            - Workflow: ${{ github.workflow }} #${{ github.run_number }}
+            - Triggered by: @${{ github.actor }}
+            
+            Generated by Enterprise Markdown to HTML Converter v3.0"
+            
+            echo "Committing with message: $COMMIT_MESSAGE"
+            git commit -m "$COMMIT_MESSAGE"
+            
+            echo "Pushing changes..."
+            git push
+            
+            echo "::notice::Changes committed and pushed successfully"
+          fi
+          
+          echo "::endgroup::"
+      
+      - name: Upload Conversion Artifacts
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: conversion-results-${{ github.run_number }}
+          path: |
+            ${{ needs.validate-inputs.outputs.sync_path }}/**/*.html
+            ${{ needs.validate-inputs.outputs.sync_path }}/**/*.css
+            conversion.log
+            markdown_conversion.log
+          retention-days: 30
+      
+      - name: Summary Report
+        if: always()
+        run: |
+          echo "## 🎯 Enterprise Conversion Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Parameter | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Path** | \`${{ needs.validate-inputs.outputs.sync_path }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Operation** | ${{ github.event.inputs.operation_mode }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Debug Mode** | ${{ github.event.inputs.enable_debug }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Workflow Run** | #${{ github.run_number }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Triggered By** | @${{ github.actor }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Status** | ${{ job.status }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [[ "${{ job.status }}" == "success" ]]; then
+            echo "### ✅ Conversion completed successfully!" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ❌ Conversion encountered issues" >> $GITHUB_STEP_SUMMARY
+            echo "Check the workflow logs and artifacts for details." >> $GITHUB_STEP_SUMMARY
+          fi
