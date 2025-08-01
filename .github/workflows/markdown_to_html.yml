@@ -30,15 +30,15 @@ on:
 
 env:
   PYTHONUNBUFFERED: '1'
-  PIP_NO_CACHE_DIR: '0'  # allow pip caching (cached via actions/cache)
+  PIP_NO_CACHE_DIR: '0'
+
+permissions:
+  contents: write
 
 jobs:
   build:
     name: Format / Convert / PDF
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      actions: write
 
     outputs:
       html_generated: ${{ steps.convert_html.outcome == 'success' && 'true' || 'false' }}
@@ -55,7 +55,6 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Trim whitespace/newlines
           SYNC_PATH="$(echo '${{ github.event.inputs.sync_path }}' | tr -d '\r\n' | xargs)"
           if [[ -z "$SYNC_PATH" ]]; then
             echo "::error::sync_path input is empty"
@@ -64,12 +63,11 @@ jobs:
 
           if [[ ! -d "$SYNC_PATH" ]]; then
             echo "::error::Directory does not exist: $SYNC_PATH"
-            echo "Available top-level dirs:"
+            echo "Top-level available dirs (sample):"
             ls -1 | head -30
             exit 1
           fi
 
-          # Find markdown file (first non-recursive)
           MD_FILE=$(find "$SYNC_PATH" -maxdepth 1 -type f -name '*.md' | head -n1)
           if [[ -z "$MD_FILE" ]]; then
             echo "::error::No Markdown file found in $SYNC_PATH"
@@ -78,7 +76,6 @@ jobs:
 
           echo "Using Markdown file: $MD_FILE"
 
-          # Export for downstream steps
           echo "SYNC_PATH=$SYNC_PATH" >> $GITHUB_ENV
           echo "MD_FILE=$MD_FILE" >> $GITHUB_ENV
           echo "OP_MODE=${{ github.event.inputs.operation_mode }}" >> $GITHUB_ENV
@@ -96,9 +93,8 @@ jobs:
           node-version: '18'
           cache: 'npm'
 
-      - name: Cache repo Python deps (requirements.txt)
+      - name: Cache pip cache explicitly (fallback)
         uses: actions/cache@v3
-        id: pip-cache
         with:
           path: ~/.cache/pip
           key: ${{ runner.os }}-pip-${{ hashFiles('.github/src/requirements.txt') }}
@@ -108,20 +104,18 @@ jobs:
       - name: Install system-level dependencies
         run: |
           set -euo pipefail
-          # Only install what we need. Use apt-get with minimal output.
           sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends pandoc bc
-          # Dependencies for wkhtmltopdf (used in PDF generation)
+          sudo apt-get install -y --no-install-recommends pandoc bc wget ca-certificates
           sudo apt-get install -y --no-install-recommends xfonts-75dpi fonts-liberation fonts-dejavu
 
       - name: Install patched wkhtmltopdf (only if PDF mode)
         if: contains(env.OP_MODE, 'pdf')
         run: |
           set -euo pipefail
-          # Remove any stock version and install known patched build
           sudo apt-get remove -y wkhtmltopdf || true
-          wget -qO /tmp/wkhtmltox.deb https://github.com/wkhtmltopdf/packaging/releases/download/0.12.6.1-2/wkhtmltox_0.12.6.1-2.jammy_amd64.deb
-          sudo dpkg -i /tmp/wkhtmltox.deb || sudo apt-get install -f -y
+          TEMP_DEB=/tmp/wkhtmltox.deb
+          wget -qO "$TEMP_DEB" https://github.com/wkhtmltopdf/packaging/releases/download/0.12.6.1-2/wkhtmltox_0.12.6.1-2.jammy_amd64.deb
+          sudo dpkg -i "$TEMP_DEB" || sudo apt-get install -f -y
           wkhtmltopdf --version
 
       - name: Setup and install Python virtualenv & deps
@@ -129,7 +123,6 @@ jobs:
           set -euo pipefail
           cd .github/src
           python3 -m venv venv
-          # shellcheck source=/dev/null
           source venv/bin/activate
           pip install --upgrade pip
           if [[ -f requirements.txt ]]; then
@@ -142,7 +135,6 @@ jobs:
         if: env.OP_MODE == 'format_and_convert' || env.OP_MODE == 'format_only' || env.OP_MODE == 'format_convert_pdf'
         run: |
           set -euo pipefail
-          # Use npx so we don't need global install
           npx prettier --write "$MD_FILE"
 
       - name: Convert Markdown to HTML (if requested)
@@ -152,7 +144,6 @@ jobs:
           set -euo pipefail
           cd .github/src
           source venv/bin/activate
-          # Run the converter; ensure flags correspond
           CONVERT_ARGS=()
           if [[ "${{ env.OP_MODE }}" == "format_and_convert" || "${{ env.OP_MODE }}" == "format_convert_pdf" ]]; then
             CONVERT_ARGS+=("--md-format")
@@ -172,13 +163,11 @@ jobs:
             echo "::error::modify_date is required for PDF generation"
             exit 1
           fi
-          # Validate date format (basic)
           if ! date -d "${{ env.MODIFY_DATE }}" '+%Y-%m-%d' >/dev/null 2>&1; then
             echo "::error::modify_date is not a valid yyyy-mm-dd date: ${{ env.MODIFY_DATE }}"
             exit 1
           fi
 
-          # Locate generated HTML
           HTML_FILE=$(find "${{ env.SYNC_PATH }}" -maxdepth 3 -name '*.html' | head -n1)
           if [[ -z "$HTML_FILE" ]]; then
             echo "::error::No HTML file found to convert to PDF"
@@ -188,10 +177,8 @@ jobs:
           cd .github/src
           source venv/bin/activate
 
-          # Export MODIFY_DATE for the PDF script
           export MODIFY_DATE="${{ env.MODIFY_DATE }}"
 
-          # Run PDF conversion
           python3 step_2_convert_html_to_pdf.py "$HTML_FILE" "${{ env.MODIFY_DATE }}"
         working-directory: .github/src
 
@@ -203,25 +190,23 @@ jobs:
       - name: Commit & push changes if any
         run: |
           set -euo pipefail
-          # Stage changes: markdown, generated HTML/PDF, styles if updated
           git add -A "${{ env.SYNC_PATH }}/" || true
           git add -A .github/src/styles/ || true
 
-          if git diff --cached --quiet; then
+          if git.diff --cached --quiet; then
             echo "No changes to commit"
           else
             OP="${{ env.OP_MODE }}"
             COMMIT_MSG="enterprise: ${OP} for ${{ env.SYNC_PATH }} - generated on $(date -u '+%Y-%m-%dT%H:%M:%SZ')"
-            echo "Committing: $COMMIT_MSG"
             git commit -m "$COMMIT_MSG"
             git push
           fi
 
       - name: Upload artifacts
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
-          name: conversion-results-${{ github.run_number }}
+          name: conversion-results-${{ github.run_number }}-${{ github.job }}
           path: |
             ${{ env.SYNC_PATH }}/**/*.html
             ${{ env.SYNC_PATH }}/**/*.css
@@ -242,5 +227,5 @@ jobs:
           fi
           echo "| HTML Generated | ${{ steps.convert_html.outcome }} |" >> $GITHUB_STEP_SUMMARY
           if [[ "${{ env.OP_MODE }}" == "format_convert_pdf" ]]; then
-            echo "| PDF Generated | ${{ steps.generate_pdf.outcome }} |" >> $GITHUB_STEP_SUMMARY
+            echo "| PDF Generated | \`${{ steps.generate_pdf.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
           fi
