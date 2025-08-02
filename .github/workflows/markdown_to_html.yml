@@ -42,16 +42,17 @@ jobs:
       - name: Show previous inputs
         run: |
           if [ -f .github/workflow-data/last-run.json ]; then
-            python3 - <<'PY' >> $GITHUB_STEP_SUMMARY
-import json
-with open('.github/workflow-data/last-run.json') as f:
-    data = json.load(f)
-print('## Previous Run')
-print(f"- sync_path: `{data.get('inputs', {}).get('sync_path', 'n/a')}`")
-print(f"- operation_mode: `{data.get('inputs', {}).get('operation_mode', 'n/a')}`")
-print(f"- outcome: {data.get('outcome', 'unknown')}")
-print(f"- timestamp: {data.get('timestamp', 'n/a')}")
-PY
+            sync_path=$(jq -r '.inputs.sync_path // "n/a"' .github/workflow-data/last-run.json)
+            op_mode=$(jq -r '.inputs.operation_mode // "n/a"' .github/workflow-data/last-run.json)
+            outcome=$(jq -r '.outcome // "unknown"' .github/workflow-data/last-run.json)
+            timestamp=$(jq -r '.timestamp // "n/a"' .github/workflow-data/last-run.json)
+            {
+              echo "## Previous Run"
+              echo "- sync_path: \`${sync_path}\`"
+              echo "- operation_mode: \`${op_mode}\`"
+              echo "- outcome: ${outcome}"
+              echo "- timestamp: ${timestamp}"
+            } >> $GITHUB_STEP_SUMMARY
           else
             echo "No prior run information found." >> $GITHUB_STEP_SUMMARY
           fi
@@ -85,7 +86,6 @@ PY
 
           if [[ ! -d "$SYNC_PATH" ]]; then
             echo "::error::Directory does not exist: $SYNC_PATH"
-            echo "Top-level available dirs (sample):"
             ls -1 | head -30
             exit 1
           fi
@@ -159,7 +159,7 @@ PY
           if [[ "${{ env.OP_MODE }}" == "format_and_convert" || "${{ env.OP_MODE }}" == "format_only" || "${{ env.OP_MODE }}" == "format_convert_pdf" ]]; then
             npx prettier --write "$MD_FILE"
           else
-            echo "Skipping markdown formatting (mode=${{ env.OP_MODE }})"
+            echo "Skipping formatting (mode=${{ env.OP_MODE }})"
           fi
 
       - name: Convert Markdown to HTML (if requested)
