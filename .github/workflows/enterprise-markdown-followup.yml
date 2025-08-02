@@ -1,141 +1,135 @@
-name: Enterprise Markdown Follow-up
+name: Enterprise Markdown → HTML (± PDF) Converter
 
 on:
-  push:
-    paths:
-      - ".github/workflows/enterprise-markdown-convert.yml"
+  workflow_dispatch:
+    inputs:
+      sync_path:
+        description: 'Path to directory containing the Markdown file (e.g., ndr/v6.0/psd01)'
+        required: true
+        type: string
+      operation_mode:
+        description: >-
+          What to do. 
+          - format_and_convert: run prettier + markdown→HTML
+          - format_only: only prettier
+          - convert_only: only markdown→HTML (no formatting)
+          - format_convert_pdf: format, convert to HTML, then HTML→PDF (requires modify_date)
+        required: true
+        type: choice
+        default: 'format_convert_pdf'
+        options:
+          - format_and_convert
+          - format_only
+          - convert_only
+          - format_convert_pdf
+      modify_date:
+        description: 'Modification date for PDF footer / timestamps (yyyy-mm-dd). Required for PDF generation.'
+        required: false
+        type: string
+        default: '2025-01-27'
 
 env:
   PYTHONUNBUFFERED: '1'
-  PIP_NO_CACHE_DIR: '0'
-
-permissions:
-  contents: write
+  PIP_NO_CACHE_DIR: '0'  # allow pip caching (cached via actions/cache)
 
 jobs:
-  guard:
-    name: Check reflection commit & dedupe
-    runs-on: ubuntu-latest
-    outputs:
-      proceed: ${{ steps.check.outputs.proceed }}
-      marker: ${{ steps.set-marker.outputs.marker }}
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          persist-credentials: true
-
-      - id: check
-        name: Inspect latest commit message
-        run: |
-          set -euo pipefail
-          MSG=$(git log -1 --pretty=%s)
-          if [[ "$MSG" == "chore: reflect runtime inputs"* ]]; then
-            echo "proceed=true" >>"$GITHUB_OUTPUT"
-          else
-            echo "proceed=false" >>"$GITHUB_OUTPUT"
-          fi
-
-      - id: set-marker
-        name: Dedupe by marker
-        run: |
-          set -euo pipefail
-          if [[ "${{ steps.check.outputs.proceed }}" != "true" ]]; then
-            echo "marker=" >>"$GITHUB_OUTPUT"
-            exit 0
-          fi
-          SHA=$(git rev-parse HEAD)
-          MARKER=".github/workflow-data/run-${SHA}.done"
-          if [[ -f "$MARKER" ]]; then
-            echo "proceed=false" >>"$GITHUB_OUTPUT"
-          fi
-          echo "marker=$MARKER" >>"$GITHUB_OUTPUT"
-
   build:
-    name: Follow-up Build
-    needs: guard
-    if: needs.guard.outputs.proceed == 'true'
+    name: Format / Convert / PDF
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: write
+
+    outputs:
+      html_generated: ${{ steps.convert_html.outcome == 'success' && 'true' || 'false' }}
+      pdf_generated: ${{ steps.generate_pdf.outcome == 'success' && 'true' || 'false' }}
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          persist-credentials: true
 
-      - name: Read reflected defaults
+      - name: Validate & normalize inputs
+        id: validate
         run: |
           set -euo pipefail
-          if ! command -v yq >/dev/null 2>&1; then
-            echo "Installing yq..."
-            curl -fsSL -o /tmp/yq_linux_amd64 https://github.com/mikefarah/yq/releases/download/v4.40.5/yq_linux_amd64
-            sudo install -m 0755 /tmp/yq_linux_amd64 /usr/local/bin/yq
-          fi
-          yq --version
-          WF=".github/workflows/enterprise-markdown-convert.yml"
-          SYNC_PATH=$(yq e '.on.workflow_dispatch.inputs.sync_path.default' "$WF")
-          OP_MODE=$(yq e '.on.workflow_dispatch.inputs.operation_mode.default' "$WF")
-          MODIFY_DATE=$(yq e '.on.workflow_dispatch.inputs.modify_date.default' "$WF")
-          echo "SYNC_PATH=$SYNC_PATH" >>"$GITHUB_ENV"
-          echo "OP_MODE=$OP_MODE" >>"$GITHUB_ENV"
-          echo "MODIFY_DATE=$MODIFY_DATE" >>"$GITHUB_ENV"
 
-      - name: Validate & locate Markdown
-        run: |
-          set -euo pipefail
-          SYNC_PATH="$(echo "$SYNC_PATH" | tr -d '\r\n' | xargs)"
+          # Trim whitespace/newlines
+          SYNC_PATH="$(echo '${{ github.event.inputs.sync_path }}' | tr -d '\r\n' | xargs)"
           if [[ -z "$SYNC_PATH" ]]; then
-            echo "::error::SYNC_PATH is empty"
+            echo "::error::sync_path input is empty"
             exit 1
           fi
+
           if [[ ! -d "$SYNC_PATH" ]]; then
             echo "::error::Directory does not exist: $SYNC_PATH"
+            echo "Available top-level dirs:"
             ls -1 | head -30
             exit 1
           fi
+
+          # Find markdown file (first non-recursive)
           MD_FILE=$(find "$SYNC_PATH" -maxdepth 1 -type f -name '*.md' | head -n1)
           if [[ -z "$MD_FILE" ]]; then
             echo "::error::No Markdown file found in $SYNC_PATH"
             exit 1
           fi
-          echo "MD_FILE=$MD_FILE" >>"$GITHUB_ENV"
 
-      - name: Setup Node.js 18
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
+          echo "Using Markdown file: $MD_FILE"
+
+          # Export for downstream steps
+          echo "SYNC_PATH=$SYNC_PATH" >> $GITHUB_ENV
+          echo "MD_FILE=$MD_FILE" >> $GITHUB_ENV
+          echo "OP_MODE=${{ github.event.inputs.operation_mode }}" >> $GITHUB_ENV
+          echo "MODIFY_DATE=${{ github.event.inputs.modify_date }}" >> $GITHUB_ENV
 
       - name: Setup Python 3.11
         uses: actions/setup-python@v4
         with:
           python-version: '3.11'
+          cache: 'pip'
+
+      - name: Setup Node.js 18
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Cache repo Python deps (requirements.txt)
+        uses: actions/cache@v3
+        id: pip-cache
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('.github/src/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
 
       - name: Install system-level dependencies
         run: |
           set -euo pipefail
+          # Only install what we need. Use apt-get with minimal output.
           sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends pandoc bc wget ca-certificates
+          sudo apt-get install -y --no-install-recommends pandoc bc
+          # Dependencies for wkhtmltopdf (used in PDF generation)
           sudo apt-get install -y --no-install-recommends xfonts-75dpi fonts-liberation fonts-dejavu
 
       - name: Install patched wkhtmltopdf (only if PDF mode)
+        if: contains(env.OP_MODE, 'pdf')
         run: |
           set -euo pipefail
-          if [[ "$OP_MODE" == *pdf* ]]; then
-            sudo apt-get remove -y wkhtmltopdf || true
-            TEMP_DEB=/tmp/wkhtmltox.deb
-            wget -qO "$TEMP_DEB" https://github.com/wkhtmltopdf/packaging/releases/download/0.12.6.1-2/wkhtmltox_0.12.6.1-2.jammy_amd64.deb
-            sudo dpkg -i "$TEMP_DEB" || sudo apt-get install -f -y
-            wkhtmltopdf --version
-          else
-            echo "Skipping wkhtmltopdf install (mode=$OP_MODE)"
-          fi
+          # Remove any stock version and install known patched build
+          sudo apt-get remove -y wkhtmltopdf || true
+          wget -qO /tmp/wkhtmltox.deb https://github.com/wkhtmltopdf/packaging/releases/download/0.12.6.1-2/wkhtmltox_0.12.6.1-2.jammy_amd64.deb
+          sudo dpkg -i /tmp/wkhtmltox.deb || sudo apt-get install -f -y
+          wkhtmltopdf --version
 
       - name: Setup and install Python virtualenv & deps
         run: |
           set -euo pipefail
           cd .github/src
           python3 -m venv venv
+          # shellcheck source=/dev/null
           source venv/bin/activate
           pip install --upgrade pip
           if [[ -f requirements.txt ]]; then
@@ -145,118 +139,108 @@ jobs:
           fi
 
       - name: Format Markdown with Prettier (if requested)
+        if: env.OP_MODE == 'format_and_convert' || env.OP_MODE == 'format_only' || env.OP_MODE == 'format_convert_pdf'
         run: |
           set -euo pipefail
-          if [[ "$OP_MODE" == "format_and_convert" || "$OP_MODE" == "format_only" || "$OP_MODE" == "format_convert_pdf" ]]; then
-            npx prettier --write "$MD_FILE"
-          fi
+          # Use npx so we don't need global install
+          npx prettier --write "$MD_FILE"
 
       - name: Convert Markdown to HTML (if requested)
-        working-directory: .github/src
+        id: convert_html
+        if: env.OP_MODE == 'format_and_convert' || env.OP_MODE == 'convert_only' || env.OP_MODE == 'format_convert_pdf'
         run: |
           set -euo pipefail
-          if [[ "$OP_MODE" == "format_and_convert" || "$OP_MODE" == "convert_only" || "$OP_MODE" == "format_convert_pdf" ]]; then
-            source venv/bin/activate
-            CONVERT_ARGS=()
-            if [[ "$OP_MODE" == "format_and_convert" || "$OP_MODE" == "format_convert_pdf" ]]; then
-              CONVERT_ARGS+=(--md-format)
-            fi
-            if [[ "$OP_MODE" == "format_and_convert" || "$OP_MODE" == "convert_only" || "$OP_MODE" == "format_convert_pdf" ]]; then
-              CONVERT_ARGS+=(--md-to-html)
-            fi
-            python3 step_1_markdown_to_html_converter_V3_0.py "$MD_FILE" "$(pwd)/../../" "$(dirname "$MD_FILE")" "${CONVERT_ARGS[@]}"
+          cd .github/src
+          source venv/bin/activate
+          # Run the converter; ensure flags correspond
+          CONVERT_ARGS=()
+          if [[ "${{ env.OP_MODE }}" == "format_and_convert" || "${{ env.OP_MODE }}" == "format_convert_pdf" ]]; then
+            CONVERT_ARGS+=("--md-format")
           fi
+          if [[ "${{ env.OP_MODE }}" == "format_and_convert" || "${{ env.OP_MODE }}" == "convert_only" || "${{ env.OP_MODE }}" == "format_convert_pdf" ]]; then
+            CONVERT_ARGS+=("--md-to-html")
+          fi
+          python3 step_1_markdown_to_html_converter_V3_0.py "$MD_FILE" "$(pwd)/../../" "$(dirname "$MD_FILE")" "${CONVERT_ARGS[@]}"
+        working-directory: .github/src
 
       - name: Convert HTML to PDF (if in PDF mode)
-        working-directory: .github/src
+        id: generate_pdf
+        if: env.OP_MODE == 'format_convert_pdf'
         run: |
           set -euo pipefail
-          if [[ "$OP_MODE" == "format_convert_pdf" ]]; then
-            if [[ -z "$MODIFY_DATE" ]]; then
-              echo "::error::modify_date is required"
-              exit 1
-            fi
-            if ! date -d "$MODIFY_DATE" '+%Y-%m-%d' >/dev/null 2>&1; then
-              echo "::error::modify_date invalid format"
-              exit 1
-            fi
-            HTML_FILE=$(find "$SYNC_PATH" -maxdepth 3 -name '*.html' | head -n1)
-            if [[ -z "$HTML_FILE" ]]; then
-              echo "::error::No HTML to convert"
-              exit 1
-            fi
-            source venv/bin/activate
-            python3 step_2_convert_html_to_pdf.py "$HTML_FILE" "$MODIFY_DATE"
+          if [[ -z "${{ env.MODIFY_DATE }}" ]]; then
+            echo "::error::modify_date is required for PDF generation"
+            exit 1
           fi
+          # Validate date format (basic)
+          if ! date -d "${{ env.MODIFY_DATE }}" '+%Y-%m-%d' >/dev/null 2>&1; then
+            echo "::error::modify_date is not a valid yyyy-mm-dd date: ${{ env.MODIFY_DATE }}"
+            exit 1
+          fi
+
+          # Locate generated HTML
+          HTML_FILE=$(find "${{ env.SYNC_PATH }}" -maxdepth 3 -name '*.html' | head -n1)
+          if [[ -z "$HTML_FILE" ]]; then
+            echo "::error::No HTML file found to convert to PDF"
+            exit 1
+          fi
+
+          cd .github/src
+          source venv/bin/activate
+
+          # Export MODIFY_DATE for the PDF script
+          export MODIFY_DATE="${{ env.MODIFY_DATE }}"
+
+          # Run PDF conversion
+          python3 step_2_convert_html_to_pdf.py "$HTML_FILE" "${{ env.MODIFY_DATE }}"
+        working-directory: .github/src
 
       - name: Configure git for commit
         run: |
-          git config --global user.name 'github-actions'
-          git config --global user.email 'github-actions@users.noreply.github.com'
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
 
       - name: Commit & push changes if any
-        env:
-          WORKFLOW_TOKEN: ${{ secrets.WORKFLOW_TOKEN }}
         run: |
           set -euo pipefail
-          MARKER="${{ needs.guard.outputs.marker }}"
-          # Use token auth for pushing
-          ORIG_URL=$(git remote get-url origin)
-          AUTH_URL="https://x-access-token:${WORKFLOW_TOKEN}@github.com/${{ github.repository }}"
-          git remote set-url origin "$AUTH_URL"
-
-          git add -A "${SYNC_PATH}/" || true
+          # Stage changes: markdown, generated HTML/PDF, styles if updated
+          git add -A "${{ env.SYNC_PATH }}/" || true
           git add -A .github/src/styles/ || true
-          if [[ -n "$MARKER" ]]; then
-            git add "$MARKER"
-          fi
 
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else
-            COMMIT_MSG="enterprise: ${OP_MODE} for ${SYNC_PATH} - generated on $(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+            OP="${{ env.OP_MODE }}"
+            COMMIT_MSG="enterprise: ${OP} for ${{ env.SYNC_PATH }} - generated on $(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+            echo "Committing: $COMMIT_MSG"
             git commit -m "$COMMIT_MSG"
             git push
           fi
 
-      - name: Mark SHA as processed
-        env:
-          WORKFLOW_TOKEN: ${{ secrets.WORKFLOW_TOKEN }}
-        run: |
-          set -euo pipefail
-          MARKER="${{ needs.guard.outputs.marker }}"
-          # Ensure commit uses token
-          ORIG_URL=$(git remote get-url origin)
-          AUTH_URL="https://x-access-token:${WORKFLOW_TOKEN}@github.com/${{ github.repository }}"
-          git remote set-url origin "$AUTH_URL"
-
-          if [[ -n "$MARKER" ]]; then
-            touch "$MARKER"
-            git add "$MARKER"
-            git commit -m "chore: mark ${GITHUB_SHA} as processed" || true
-            git push || true
-          fi
-
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        if: always()
+        uses: actions/upload-artifact@v3
         with:
-          name: followup-results-${{ github.run_number }}
+          name: conversion-results-${{ github.run_number }}
           path: |
-            ${SYNC_PATH}/**/*.html
-            ${SYNC_PATH}/**/*.css
-            ${SYNC_PATH}/**/*.pdf
+            ${{ env.SYNC_PATH }}/**/*.html
+            ${{ env.SYNC_PATH }}/**/*.css
+            ${{ env.SYNC_PATH }}/**/*.pdf
             .github/src/markdown_conversion.log
             conversion.log
 
       - name: Summary notices
+        if: always()
         run: |
-          {
-            echo "## ✅ Conversion summary"
-            echo "| Field | Value |"
-            echo "|-------|-------|"
-            echo "| Sync Path | \`${SYNC_PATH}\` |"
-            echo "| Mode | \`${OP_MODE}\` |"
-            if [[ "$OP_MODE" == "format_convert_pdf" ]]; then
-              echo "| Modify Date | \`${MODIFY_DATE}\` |"
-            fi
-          } >> $GITHUB_STEP_SUMMARY
+          echo "## ✅ Conversion summary" >> $GITHUB_STEP_SUMMARY
+          echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Sync Path | \`${{ env.SYNC_PATH }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Mode | \`${{ env.OP_MODE }}\` |" >> $GITHUB_STEP_SUMMARY
+          if [[ "${{ env.OP_MODE }}" == "format_convert_pdf" ]]; then
+            echo "| Modify Date | \`${{ env.MODIFY_DATE }}\` |" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "| HTML Generated | ${{ steps.convert_html.outcome }} |" >> $GITHUB_STEP_SUMMARY
+          if [[ "${{ env.OP_MODE }}" == "format_convert_pdf" ]]; then
+            echo "| PDF Generated | ${{ steps.generate_pdf.outcome }} |" >> $GITHUB_STEP_SUMMARY
+          fi
