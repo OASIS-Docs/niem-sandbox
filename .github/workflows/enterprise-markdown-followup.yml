@@ -1,14 +1,19 @@
 name: Enterprise Markdown Follow-up
+
 on:
   push:
     paths:
       - ".github/workflows/enterprise-markdown-convert.yml"
+
 env:
   PYTHONUNBUFFERED: '1'
   PIP_NO_CACHE_DIR: '0'
+
 permissions:
   contents: write
-  models: write
+  # Remove the line below, 'models: write' is not a valid permission at the workflow level!
+  # models: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
