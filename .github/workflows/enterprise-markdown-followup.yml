@@ -11,7 +11,6 @@ env:
 
 permissions:
   contents: write
-  workflows: write
 
 jobs:
   build:
@@ -101,14 +100,18 @@ jobs:
           sudo apt-get install -y --no-install-recommends xfonts-75dpi fonts-liberation fonts-dejavu
 
       - name: Install patched wkhtmltopdf (only if PDF mode)
-        if: steps.guard.outputs.continue == 'true' && [[ "$OP_MODE" == *pdf* ]]
+        if: steps.guard.outputs.continue == 'true'
         run: |
           set -euo pipefail
-          sudo apt-get remove -y wkhtmltopdf || true
-          TEMP_DEB=/tmp/wkhtmltox.deb
-          wget -qO "$TEMP_DEB" https://github.com/wkhtmltopdf/packaging/releases/download/0.12.6.1-2/wkhtmltox_0.12.6.1-2.jammy_amd64.deb
-          sudo dpkg -i "$TEMP_DEB" || sudo apt-get install -f -y
-          wkhtmltopdf --version
+          if [[ "$OP_MODE" == *pdf* ]]; then
+            sudo apt-get remove -y wkhtmltopdf || true
+            TEMP_DEB=/tmp/wkhtmltox.deb
+            wget -qO "$TEMP_DEB" https://github.com/wkhtmltopdf/packaging/releases/download/0.12.6.1-2/wkhtmltox_0.12.6.1-2.jammy_amd64.deb
+            sudo dpkg -i "$TEMP_DEB" || sudo apt-get install -f -y
+            wkhtmltopdf --version
+          else
+            echo "Skipping wkhtmltopdf install (mode=$OP_MODE)"
+          fi
 
       - name: Setup and install Python virtualenv & deps
         if: steps.guard.outputs.continue == 'true'
@@ -188,7 +191,6 @@ jobs:
         if: steps.guard.outputs.continue == 'true'
         run: |
           set -euo pipefail
-          MARKER="${MARKER:-}"
           git add -A "${SYNC_PATH}/" || true
           git add -A .github/src/styles/ || true
           if git diff --cached --quiet; then
@@ -203,8 +205,8 @@ jobs:
         if: steps.guard.outputs.continue == 'true'
         run: |
           set -euo pipefail
-          touch "${MARKER}"
-          git add "${MARKER}"
+          touch ".github/workflow-data/run-${GITHUB_SHA}.done"
+          git add ".github/workflow-data/run-${GITHUB_SHA}.done"
           git commit -m "chore: mark ${GITHUB_SHA} as processed" || true
           git push || true
 
