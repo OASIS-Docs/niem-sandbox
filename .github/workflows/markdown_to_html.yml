@@ -265,15 +265,7 @@ PY
           RESULT: ${{ needs.build.result }}
         run: |
           mkdir -p .github/workflow-data
-          python3 - <<'PY'
-import json, os, datetime, pathlib
-data = {
-    'inputs': json.loads(os.environ.get('INPUTS_JSON', '{}')),
-    'outcome': os.environ.get('RESULT', 'unknown'),
-    'timestamp': datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')
-}
-path = pathlib.Path('.github/workflow-data/last-run.json')
-path.write_text(json.dumps(data, indent=2))
+            python3 .github/src/record_run_parameters.py
 
           git config user.name 'github-actions[bot]'
           git config user.email 'github-actions[bot]@users.noreply.github.com'
