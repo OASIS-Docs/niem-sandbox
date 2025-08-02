@@ -17,7 +17,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     env:
-      WORKFLOW_TOKEN: ${{ secrets.WORKFLOW_TOKEN }}
+      WORKFLOW_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       GITHUB_REPOSITORY: ${{ github.repository }}
     steps:
       - name: Checkout repository
