@@ -49,12 +49,13 @@ jobs:
           fetch-depth: 0
           persist-credentials: true
 
-      - name: Run external reflection script
+      - name: Run reflection script
         env:
           SYNC_PATH: ${{ github.event.inputs.sync_path }}
           OP_MODE: ${{ github.event.inputs.operation_mode }}
           MODIFY_DATE: ${{ github.event.inputs.modify_date }}
-          GIT_PUSH_TOKEN: ${{ secrets.GIT_PUSH_TOKEN }}
+          AUTH_TOKEN: ${{ secrets.WORKFLOW_TOKEN }}   # preferred; must have repo+workflow scopes
+          GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
           chmod +x ./scripts/reflect-inputs.sh
           ./scripts/reflect-inputs.sh
