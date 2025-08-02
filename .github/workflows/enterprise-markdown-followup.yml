@@ -13,7 +13,49 @@ permissions:
   contents: write
 
 jobs:
+  guard:
+    name: Check reflection commit & dedupe
+    runs-on: ubuntu-latest
+    outputs:
+      proceed: ${{ steps.check.outputs.proceed }}
+      marker: ${{ steps.set-marker.outputs.marker }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - id: check
+        name: Inspect latest commit message
+        run: |
+          set -euo pipefail
+          MSG=$(git log -1 --pretty=%s)
+          if [[ "$MSG" == "chore: reflect runtime inputs"* ]]; then
+            echo "proceed=true" >>"$GITHUB_OUTPUT"
+          else
+            echo "proceed=false" >>"$GITHUB_OUTPUT"
+          fi
+
+      - id: set-marker
+        name: Dedupe by marker
+        run: |
+          set -euo pipefail
+          if [[ "${{ steps.check.outputs.proceed }}" != "true" ]]; then
+            echo "marker=" >>"$GITHUB_OUTPUT"
+            exit 0
+          fi
+          SHA=$(git rev-parse HEAD)
+          MARKER=".github/workflow-data/run-${SHA}.done"
+          if [[ -f "$MARKER" ]]; then
+            echo "proceed=false" >>"$GITHUB_OUTPUT"
+          fi
+          echo "marker=$MARKER" >>"$GITHUB_OUTPUT"
+
   build:
+    name: Follow-up Build
+    needs: guard
+    if: needs.guard.outputs.proceed == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -22,26 +64,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: true
 
-      - name: Guard: reflection commit and dedupe
-        id: guard
-        run: |
-          set -euo pipefail
-          MSG=$(git log -1 --pretty=%s)
-          if [[ "$MSG" != "chore: reflect runtime inputs"* ]]; then
-            echo "continue=false" >>"$GITHUB_OUTPUT"
-            exit 0
-          fi
-          SHA=$(git rev-parse HEAD)
-          MARKER=".github/workflow-data/run-${SHA}.done"
-          if [[ -f "$MARKER" ]]; then
-            echo "continue=false" >>"$GITHUB_OUTPUT"
-            exit 0
-          fi
-          echo "continue=true" >>"$GITHUB_OUTPUT"
-          echo "MARKER=$MARKER" >>"$GITHUB_ENV"
-
       - name: Read reflected defaults
-        if: steps.guard.outputs.continue == 'true'
         run: |
           set -euo pipefail
           if ! command -v yq >/dev/null 2>&1; then
@@ -59,7 +82,6 @@ jobs:
           echo "MODIFY_DATE=$MODIFY_DATE" >>"$GITHUB_ENV"
 
       - name: Validate & locate Markdown
-        if: steps.guard.outputs.continue == 'true'
         run: |
           set -euo pipefail
           SYNC_PATH="$(echo "$SYNC_PATH" | tr -d '\r\n' | xargs)"
@@ -80,19 +102,16 @@ jobs:
           echo "MD_FILE=$MD_FILE" >>"$GITHUB_ENV"
 
       - name: Setup Node.js 18
-        if: steps.guard.outputs.continue == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: '18'
 
       - name: Setup Python 3.11
-        if: steps.guard.outputs.continue == 'true'
         uses: actions/setup-python@v4
         with:
           python-version: '3.11'
 
       - name: Install system-level dependencies
-        if: steps.guard.outputs.continue == 'true'
         run: |
           set -euo pipefail
           sudo apt-get update -qq
@@ -100,7 +119,6 @@ jobs:
           sudo apt-get install -y --no-install-recommends xfonts-75dpi fonts-liberation fonts-dejavu
 
       - name: Install patched wkhtmltopdf (only if PDF mode)
-        if: steps.guard.outputs.continue == 'true'
         run: |
           set -euo pipefail
           if [[ "$OP_MODE" == *pdf* ]]; then
@@ -114,7 +132,6 @@ jobs:
           fi
 
       - name: Setup and install Python virtualenv & deps
-        if: steps.guard.outputs.continue == 'true'
         run: |
           set -euo pipefail
           cd .github/src
@@ -128,7 +145,6 @@ jobs:
           fi
 
       - name: Format Markdown with Prettier (if requested)
-        if: steps.guard.outputs.continue == 'true'
         run: |
           set -euo pipefail
           if [[ "$OP_MODE" == "format_and_convert" || "$OP_MODE" == "format_only" || "$OP_MODE" == "format_convert_pdf" ]]; then
@@ -138,7 +154,6 @@ jobs:
           fi
 
       - name: Convert Markdown to HTML (if requested)
-        if: steps.guard.outputs.continue == 'true'
         working-directory: .github/src
         run: |
           set -euo pipefail
@@ -157,7 +172,6 @@ jobs:
           fi
 
       - name: Convert HTML to PDF (if in PDF mode)
-        if: steps.guard.outputs.continue == 'true'
         working-directory: .github/src
         run: |
           set -euo pipefail
@@ -182,19 +196,19 @@ jobs:
           fi
 
       - name: Configure git for commit
-        if: steps.guard.outputs.continue == 'true'
         run: |
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
 
       - name: Commit & push changes if any
-        if: steps.guard.outputs.continue == 'true'
         run: |
           set -euo pipefail
-          MARKER="${MARKER}"
+          MARKER="${{ needs.guard.outputs.marker }}"
           git add -A "${SYNC_PATH}/" || true
           git add -A .github/src/styles/ || true
-          git add "$MARKER"
+          if [[ -n "$MARKER" ]]; then
+            git add "$MARKER"
+          fi
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else
@@ -204,16 +218,17 @@ jobs:
           fi
 
       - name: Mark SHA as processed
-        if: steps.guard.outputs.continue == 'true'
         run: |
           set -euo pipefail
-          touch "${MARKER}"
-          git add "${MARKER}"
-          git commit -m "chore: mark ${GITHUB_SHA} as processed" || true
-          git push || true
+          MARKER="${{ needs.guard.outputs.marker }}"
+          if [[ -n "$MARKER" ]]; then
+            touch "$MARKER"
+            git add "$MARKER"
+            git commit -m "chore: mark ${GITHUB_SHA} as processed" || true
+            git push || true
+          fi
 
       - name: Upload artifacts
-        if: always() && steps.guard.outputs.continue == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: followup-results-${{ github.run_number }}
@@ -225,7 +240,6 @@ jobs:
             conversion.log
 
       - name: Summary notices
-        if: always() && steps.guard.outputs.continue == 'true'
         run: |
           {
             echo "## ✅ Conversion summary"
