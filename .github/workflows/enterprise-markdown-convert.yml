@@ -1,4 +1,4 @@
-name: Enterprise Markdown → HTML (± PDF) Converter (self-reflecting, no cache)
+name: 0 Enterprise Markdown → HTML (± PDF) Converter (self-reflecting, no cache)
 
 on:
   workflow_dispatch:
