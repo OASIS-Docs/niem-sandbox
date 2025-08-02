@@ -54,6 +54,7 @@ jobs:
           SYNC_PATH: ${{ github.event.inputs.sync_path }}
           OP_MODE: ${{ github.event.inputs.operation_mode }}
           MODIFY_DATE: ${{ github.event.inputs.modify_date }}
+          GIT_PUSH_TOKEN: ${{ secrets.GIT_PUSH_TOKEN }}
         run: |
           chmod +x ./scripts/reflect-inputs.sh
           ./scripts/reflect-inputs.sh
@@ -85,12 +86,27 @@ jobs:
 
       - name: Commit reflection (fallback)
         if: failure()
+        env:
+          GIT_PUSH_TOKEN: ${{ secrets.GIT_PUSH_TOKEN }}
         run: |
+          set -euo pipefail
           git config user.name "self-reflector[bot]"
           git config user.email "self-reflector@users.noreply.github.com"
           git add .github/workflows/enterprise-markdown-convert.yml
+
+          if [[ -n "${GIT_PUSH_TOKEN-}" ]]; then
+            ORIG_URL=$(git remote get-url origin)
+            AUTH_URL=$(echo "$ORIG_URL" | sed -E "s#https://#https://${GIT_PUSH_TOKEN}@#")
+            git remote set-url origin "$AUTH_URL"
+          fi
+
           git commit --allow-empty -m "chore: reflect runtime inputs sync_path='${{ github.event.inputs.sync_path }}' operation_mode='${{ github.event.inputs.operation_mode }}' modify_date='${{ github.event.inputs.modify_date }}'"
-          git push
+          if ! git push; then
+            echo "Warning: push failed. Inspect permissions or token." >&2
+          fi
+          if [[ -n "${GIT_PUSH_TOKEN-}" ]]; then
+            git remote set-url origin "$ORIG_URL"
+          fi
 
   build:
     name: Format / Convert / PDF
@@ -146,14 +162,17 @@ jobs:
           sudo apt-get install -y --no-install-recommends xfonts-75dpi fonts-liberation fonts-dejavu
 
       - name: Install patched wkhtmltopdf (only if PDF mode)
-        if: contains(env.OP_MODE, 'pdf')
         run: |
           set -euo pipefail
-          sudo apt-get remove -y wkhtmltopdf || true
-          TEMP_DEB=/tmp/wkhtmltox.deb
-          wget -qO "$TEMP_DEB" https://github.com/wkhtmltopdf/packaging/releases/download/0.12.6.1-2/wkhtmltox_0.12.6.1-2.jammy_amd64.deb
-          sudo dpkg -i "$TEMP_DEB" || sudo apt-get install -f -y
-          wkhtmltopdf --version
+          if [[ "${{ env.OP_MODE }}" == *pdf* ]]; then
+            sudo apt-get remove -y wkhtmltopdf || true
+            TEMP_DEB=/tmp/wkhtmltox.deb
+            wget -qO "$TEMP_DEB" https://github.com/wkhtmltopdf/packaging/releases/download/0.12.6.1-2/wkhtmltox_0.12.6.1-2.jammy_amd64.deb
+            sudo dpkg -i "$TEMP_DEB" || sudo apt-get install -f -y
+            wkhtmltopdf --version
+          else
+            echo "Skipping wkhtmltopdf install (mode=${{ env.OP_MODE }})"
+          fi
 
       - name: Setup and install Python virtualenv & deps
         run: |

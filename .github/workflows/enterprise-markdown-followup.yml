@@ -181,12 +181,12 @@ jobs:
               exit 1
             fi
             if ! date -d "$MODIFY_DATE" '+%Y-%m-%d' >/dev/null 2>&1; then
-              echo "::error::modify_date is not a valid yyyy-mm-dd date: $MODIFY_DATE"
+              echo "::error::modify_date invalid format"
               exit 1
             fi
             HTML_FILE=$(find "$SYNC_PATH" -maxdepth 3 -name '*.html' | head -n1)
             if [[ -z "$HTML_FILE" ]]; then
-              echo "::error::No HTML file found to convert to PDF"
+              echo "::error::No HTML to convert"
               exit 1
             fi
             source venv/bin/activate
