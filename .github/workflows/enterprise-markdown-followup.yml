@@ -27,7 +27,8 @@ jobs:
         run: |
           set -euo pipefail
           MSG=$(git log -1 --pretty=%s)
-          if [[ "$MSG" != chore:\ reflect\ runtime\ inputs* ]]; then
+          # Accept messages starting with "chore: reflect runtime inputs"
+          if [[ "$MSG" != "chore: reflect runtime inputs"* ]]; then
             echo "continue=false" >> $GITHUB_OUTPUT
             exit 0
           fi
