@@ -8,7 +8,7 @@ env:
   PIP_NO_CACHE_DIR: '0'
 permissions:
   contents: write
-  workflows: write
+  models: write
 jobs:
   build:
     runs-on: ubuntu-latest
