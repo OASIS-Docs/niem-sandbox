@@ -11,14 +11,11 @@ env:
 
 permissions:
   contents: write
-  # Remove the line below, 'models: write' is not a valid permission at the workflow level!
-  # models: write
 
 jobs:
   build:
     runs-on: ubuntu-latest
     env:
-      WORKFLOW_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       GITHUB_REPOSITORY: ${{ github.repository }}
     steps:
       - name: Checkout repository
@@ -194,9 +191,12 @@ jobs:
 
       - name: Commit & push changes if any
         if: steps.guard.outputs.continue == 'true'
+        env:
+          WORKFLOW_TOKEN: ${{ secrets.WORKFLOW_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          AUTH_TOKEN="${WORKFLOW_TOKEN:-}"
+          AUTH_TOKEN="${WORKFLOW_TOKEN:-${GITHUB_TOKEN}}"
           ORIG_URL=$(git remote get-url origin || true)
           if [[ -n "$AUTH_TOKEN" && -n "${GITHUB_REPOSITORY-}" ]]; then
             git remote set-url origin "https://x-access-token:${AUTH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
@@ -216,9 +216,12 @@ jobs:
 
       - name: Mark SHA as processed
         if: steps.guard.outputs.continue == 'true'
+        env:
+          WORKFLOW_TOKEN: ${{ secrets.WORKFLOW_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          AUTH_TOKEN="${WORKFLOW_TOKEN:-}"
+          AUTH_TOKEN="${WORKFLOW_TOKEN:-${GITHUB_TOKEN}}"
           ORIG_URL=$(git remote get-url origin || true)
           if [[ -n "$AUTH_TOKEN" && -n "${GITHUB_REPOSITORY-}" ]]; then
             git remote set-url origin "https://x-access-token:${AUTH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
