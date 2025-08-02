@@ -15,6 +15,9 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      WORKFLOW_TOKEN: ${{ secrets.WORKFLOW_TOKEN }}
+      GITHUB_REPOSITORY: ${{ github.repository }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -191,6 +194,11 @@ jobs:
         if: steps.guard.outputs.continue == 'true'
         run: |
           set -euo pipefail
+          AUTH_TOKEN="${WORKFLOW_TOKEN:-}"
+          ORIG_URL=$(git remote get-url origin || true)
+          if [[ -n "$AUTH_TOKEN" && -n "${GITHUB_REPOSITORY-}" ]]; then
+            git remote set-url origin "https://x-access-token:${AUTH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          fi
           git add -A "${SYNC_PATH}/" || true
           git add -A .github/src/styles/ || true
           if git diff --cached --quiet; then
@@ -200,15 +208,26 @@ jobs:
             git commit -m "$COMMIT_MSG"
             git push
           fi
+          if [[ -n "$AUTH_TOKEN" && -n "$ORIG_URL" ]]; then
+            git remote set-url origin "$ORIG_URL"
+          fi
 
       - name: Mark SHA as processed
         if: steps.guard.outputs.continue == 'true'
         run: |
           set -euo pipefail
-          touch ".github/workflow-data/run-${GITHUB_SHA}.done"
-          git add ".github/workflow-data/run-${GITHUB_SHA}.done"
+          AUTH_TOKEN="${WORKFLOW_TOKEN:-}"
+          ORIG_URL=$(git remote get-url origin || true)
+          if [[ -n "$AUTH_TOKEN" && -n "${GITHUB_REPOSITORY-}" ]]; then
+            git remote set-url origin "https://x-access-token:${AUTH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          fi
+          touch "${MARKER}"
+          git add "${MARKER}"
           git commit -m "chore: mark ${GITHUB_SHA} as processed" || true
           git push || true
+          if [[ -n "$AUTH_TOKEN" && -n "$ORIG_URL" ]]; then
+            git remote set-url origin "$ORIG_URL"
+          fi
 
       - name: Upload artifacts
         if: always() && steps.guard.outputs.continue == 'true'
