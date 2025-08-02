@@ -149,8 +149,6 @@ jobs:
           set -euo pipefail
           if [[ "$OP_MODE" == "format_and_convert" || "$OP_MODE" == "format_only" || "$OP_MODE" == "format_convert_pdf" ]]; then
             npx prettier --write "$MD_FILE"
-          else
-            echo "Skipping formatting (mode=$OP_MODE)"
           fi
 
       - name: Convert Markdown to HTML (if requested)
@@ -167,8 +165,6 @@ jobs:
               CONVERT_ARGS+=(--md-to-html)
             fi
             python3 step_1_markdown_to_html_converter_V3_0.py "$MD_FILE" "$(pwd)/../../" "$(dirname "$MD_FILE")" "${CONVERT_ARGS[@]}"
-          else
-            echo "Skipping Markdown→HTML conversion (mode=$OP_MODE)"
           fi
 
       - name: Convert HTML to PDF (if in PDF mode)
@@ -177,7 +173,7 @@ jobs:
           set -euo pipefail
           if [[ "$OP_MODE" == "format_convert_pdf" ]]; then
             if [[ -z "$MODIFY_DATE" ]]; then
-              echo "::error::modify_date is required for PDF generation"
+              echo "::error::modify_date is required"
               exit 1
             fi
             if ! date -d "$MODIFY_DATE" '+%Y-%m-%d' >/dev/null 2>&1; then
@@ -191,24 +187,30 @@ jobs:
             fi
             source venv/bin/activate
             python3 step_2_convert_html_to_pdf.py "$HTML_FILE" "$MODIFY_DATE"
-          else
-            echo "Skipping PDF generation (mode=$OP_MODE)"
           fi
 
       - name: Configure git for commit
         run: |
-          git config --global user.name 'github-actions[bot]'
-          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          git config --global user.name 'github-actions'
+          git config --global user.email 'github-actions@users.noreply.github.com'
 
       - name: Commit & push changes if any
+        env:
+          WORKFLOW_TOKEN: ${{ secrets.WORKFLOW_TOKEN }}
         run: |
           set -euo pipefail
           MARKER="${{ needs.guard.outputs.marker }}"
+          # Use token auth for pushing
+          ORIG_URL=$(git remote get-url origin)
+          AUTH_URL="https://x-access-token:${WORKFLOW_TOKEN}@github.com/${{ github.repository }}"
+          git remote set-url origin "$AUTH_URL"
+
           git add -A "${SYNC_PATH}/" || true
           git add -A .github/src/styles/ || true
           if [[ -n "$MARKER" ]]; then
             git add "$MARKER"
           fi
+
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else
@@ -218,9 +220,16 @@ jobs:
           fi
 
       - name: Mark SHA as processed
+        env:
+          WORKFLOW_TOKEN: ${{ secrets.WORKFLOW_TOKEN }}
         run: |
           set -euo pipefail
           MARKER="${{ needs.guard.outputs.marker }}"
+          # Ensure commit uses token
+          ORIG_URL=$(git remote get-url origin)
+          AUTH_URL="https://x-access-token:${WORKFLOW_TOKEN}@github.com/${{ github.repository }}"
+          git remote set-url origin "$AUTH_URL"
+
           if [[ -n "$MARKER" ]]; then
             touch "$MARKER"
             git add "$MARKER"
