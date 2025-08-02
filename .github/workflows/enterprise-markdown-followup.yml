@@ -27,19 +27,18 @@ jobs:
         run: |
           set -euo pipefail
           MSG=$(git log -1 --pretty=%s)
-          # Accept messages starting with "chore: reflect runtime inputs"
           if [[ "$MSG" != "chore: reflect runtime inputs"* ]]; then
-            echo "continue=false" >> $GITHUB_OUTPUT
+            echo "continue=false" >>"$GITHUB_OUTPUT"
             exit 0
           fi
           SHA=$(git rev-parse HEAD)
           MARKER=".github/workflow-data/run-${SHA}.done"
           if [[ -f "$MARKER" ]]; then
-            echo "continue=false" >> $GITHUB_OUTPUT
+            echo "continue=false" >>"$GITHUB_OUTPUT"
             exit 0
           fi
-          echo "continue=true" >> $GITHUB_OUTPUT
-          echo "MARKER=$MARKER" >> $GITHUB_ENV
+          echo "continue=true" >>"$GITHUB_OUTPUT"
+          echo "MARKER=$MARKER" >>"$GITHUB_ENV"
 
       - name: Read reflected defaults
         if: steps.guard.outputs.continue == 'true'
@@ -55,9 +54,9 @@ jobs:
           SYNC_PATH=$(yq e '.on.workflow_dispatch.inputs.sync_path.default' "$WF")
           OP_MODE=$(yq e '.on.workflow_dispatch.inputs.operation_mode.default' "$WF")
           MODIFY_DATE=$(yq e '.on.workflow_dispatch.inputs.modify_date.default' "$WF")
-          echo "SYNC_PATH=$SYNC_PATH" >> $GITHUB_ENV
-          echo "OP_MODE=$OP_MODE" >> $GITHUB_ENV
-          echo "MODIFY_DATE=$MODIFY_DATE" >> $GITHUB_ENV
+          echo "SYNC_PATH=$SYNC_PATH" >>"$GITHUB_ENV"
+          echo "OP_MODE=$OP_MODE" >>"$GITHUB_ENV"
+          echo "MODIFY_DATE=$MODIFY_DATE" >>"$GITHUB_ENV"
 
       - name: Validate & locate Markdown
         if: steps.guard.outputs.continue == 'true'
@@ -78,7 +77,7 @@ jobs:
             echo "::error::No Markdown file found in $SYNC_PATH"
             exit 1
           fi
-          echo "MD_FILE=$MD_FILE" >> $GITHUB_ENV
+          echo "MD_FILE=$MD_FILE" >>"$GITHUB_ENV"
 
       - name: Setup Node.js 18
         if: steps.guard.outputs.continue == 'true'
@@ -101,14 +100,18 @@ jobs:
           sudo apt-get install -y --no-install-recommends xfonts-75dpi fonts-liberation fonts-dejavu
 
       - name: Install patched wkhtmltopdf (only if PDF mode)
-        if: steps.guard.outputs.continue == 'true' && contains(env.OP_MODE, 'pdf')
+        if: steps.guard.outputs.continue == 'true'
         run: |
           set -euo pipefail
-          sudo apt-get remove -y wkhtmltopdf || true
-          TEMP_DEB=/tmp/wkhtmltox.deb
-          wget -qO "$TEMP_DEB" https://github.com/wkhtmltopdf/packaging/releases/download/0.12.6.1-2/wkhtmltox_0.12.6.1-2.jammy_amd64.deb
-          sudo dpkg -i "$TEMP_DEB" || sudo apt-get install -f -y
-          wkhtmltopdf --version
+          if [[ "$OP_MODE" == *pdf* ]]; then
+            sudo apt-get remove -y wkhtmltopdf || true
+            TEMP_DEB=/tmp/wkhtmltox.deb
+            wget -qO "$TEMP_DEB" https://github.com/wkhtmltopdf/packaging/releases/download/0.12.6.1-2/wkhtmltox_0.12.6.1-2.jammy_amd64.deb
+            sudo dpkg -i "$TEMP_DEB" || sudo apt-get install -f -y
+            wkhtmltopdf --version
+          else
+            echo "Skipping wkhtmltopdf install (mode=$OP_MODE)"
+          fi
 
       - name: Setup and install Python virtualenv & deps
         if: steps.guard.outputs.continue == 'true'
