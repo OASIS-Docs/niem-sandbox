@@ -35,11 +35,15 @@ env:
 
 permissions:
   contents: write
+  workflows: write
 
 jobs:
   reflect-inputs:
     name: Reflect Inputs into Workflow YAML
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      workflows: write
     outputs:
       reflected: true
     steps:
@@ -54,7 +58,8 @@ jobs:
           SYNC_PATH: ${{ github.event.inputs.sync_path }}
           OP_MODE: ${{ github.event.inputs.operation_mode }}
           MODIFY_DATE: ${{ github.event.inputs.modify_date }}
-          AUTH_TOKEN: ${{ secrets.WORKFLOW_TOKEN }}   # preferred; must have repo+workflow scopes
+          WORKFLOW_TOKEN: ${{ secrets.WORKFLOW_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
           chmod +x ./scripts/reflect-inputs.sh
@@ -62,6 +67,9 @@ jobs:
 
       - name: Inline reflect inputs (fallback)
         if: failure()
+        env:
+          WORKFLOW_TOKEN: ${{ secrets.WORKFLOW_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           # Ensure yq is installed
@@ -78,6 +86,7 @@ jobs:
             exit 1
           fi
           cp "$WF" "${WF}.bak"
+
           yq eval --inplace ".on.workflow_dispatch.inputs.sync_path.default = \"${{ github.event.inputs.sync_path }}\"" "$WF"
           yq eval --inplace ".on.workflow_dispatch.inputs.operation_mode.default = \"${{ github.event.inputs.operation_mode }}\"" "$WF"
           yq eval --inplace ".on.workflow_dispatch.inputs.modify_date.default = \"${{ github.event.inputs.modify_date }}\"" "$WF"
@@ -88,26 +97,30 @@ jobs:
       - name: Commit reflection (fallback)
         if: failure()
         env:
-          GIT_PUSH_TOKEN: ${{ secrets.GIT_PUSH_TOKEN }}
+          WORKFLOW_TOKEN: ${{ secrets.WORKFLOW_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
           git config user.name "self-reflector[bot]"
           git config user.email "self-reflector@users.noreply.github.com"
           git add .github/workflows/enterprise-markdown-convert.yml
 
-          if [[ -n "${GIT_PUSH_TOKEN-}" ]]; then
-            ORIG_URL=$(git remote get-url origin)
-            AUTH_URL=$(echo "$ORIG_URL" | sed -E "s#https://#https://${GIT_PUSH_TOKEN}@#")
+          # Prepare authenticated push URL using available token with fallback priority
+          AUTH_TOKEN="${WORKFLOW_TOKEN:-${GITHUB_TOKEN-}}"
+          ORIG_URL=$(git remote get-url origin)
+          if [[ -n "${AUTH_TOKEN}" ]]; then
+            AUTH_URL="https://x-access-token:${AUTH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
             git remote set-url origin "$AUTH_URL"
           fi
 
           git commit --allow-empty -m "chore: reflect runtime inputs sync_path='${{ github.event.inputs.sync_path }}' operation_mode='${{ github.event.inputs.operation_mode }}' modify_date='${{ github.event.inputs.modify_date }}'"
           if ! git push; then
-            echo "Warning: push failed. Inspect permissions or token." >&2
+            echo "Warning: push failed. Inspect token scopes/permissions." >&2
           fi
-          if [[ -n "${GIT_PUSH_TOKEN-}" ]]; then
-            git remote set-url origin "$ORIG_URL"
-          fi
+
+      - name: Setup / Validate for build output
+        run: echo "Reflection done, proceeding to build." 
 
   build:
     name: Format / Convert / PDF
@@ -289,6 +302,6 @@ jobs:
             fi
             echo "| HTML Generated | ${{ steps.convert_html.outcome }} |"
             if [[ "${{ env.OP_MODE }}" == "format_convert_pdf" ]]; then
-              echo "| PDF Generated | \`${{ steps.generate_pdf.outcome }}\` |"
+              echo "| PDF Generated | \`${{ env.generate_pdf.outcome }}\` |"
             fi
           } >> $GITHUB_STEP_SUMMARY
