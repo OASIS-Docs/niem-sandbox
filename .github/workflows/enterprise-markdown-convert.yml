@@ -92,27 +92,29 @@ jobs:
           diff -u "${WF}.bak" "$WF" || true
 
       - name: Commit reflection (fallback)
-        if: failure()
         env:
           WORKFLOW_TOKEN: ${{ secrets.WORKFLOW_TOKEN }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
           git config user.name "self-reflector[bot]"
           git config user.email "self-reflector@users.noreply.github.com"
           git add .github/workflows/enterprise-markdown-convert.yml
-
-          AUTH_TOKEN="${WORKFLOW_TOKEN:-${GITHUB_TOKEN-}}"
-          ORIG_URL=$(git remote get-url origin)
-          if [[ -n "${AUTH_TOKEN}" ]]; then
-            git remote set-url origin "https://x-access-token:${AUTH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+      
+          if [[ -z "${WORKFLOW_TOKEN:-}" ]]; then
+            echo "::error::WORKFLOW_TOKEN is not set. Aborting push."
+            exit 1
           fi
-
+      
+          ORIG_URL=$(git remote get-url origin)
+          git remote set-url origin "https://x-access-token:${WORKFLOW_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+      
           git commit --allow-empty -m "chore: reflect runtime inputs sync_path='${{ github.event.inputs.sync_path }}' operation_mode='${{ github.event.inputs.operation_mode }}' modify_date='${{ github.event.inputs.modify_date }}'"
           if ! git push; then
-            echo "Warning: push failed. Inspect token scopes/permissions." >&2
+            echo "Warning: push failed. Inspect WORKFLOW_TOKEN scopes/permissions." >&2
           fi
+      
+          git remote set-url origin "$ORIG_URL"
 
   build:
     name: Format / Convert / PDF
