@@ -1,0 +1,200 @@
+name: Enterprise Markdown Follow-up Build
+
+on:
+  push:
+    paths:
+      - '.github/workflows/enterprise-markdown-convert.yml'
+
+jobs:
+  build:
+    if: startsWith(github.event.head_commit.message, 'chore: reflect runtime inputs')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Avoid duplicate processing
+        run: |
+          set -euo pipefail
+          MARKER=.github/workflow-data/run-${{ github.sha }}.done
+          if [ -f "$MARKER" ]; then
+            echo "Commit already processed" >> $GITHUB_STEP_SUMMARY
+            exit 0
+          fi
+
+      - name: Install yq
+        run: |
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/download/v4.40.5/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Read reflected defaults
+        id: readdefaults
+        run: |
+          set -euo pipefail
+          FILE=.github/workflows/enterprise-markdown-convert.yml
+          SYNC_PATH=$(yq e '.on.workflow_dispatch.inputs.sync_path.default' "$FILE")
+          OP_MODE=$(yq e '.on.workflow_dispatch.inputs.operation_mode.default' "$FILE")
+          MODIFY_DATE=$(yq e '.on.workflow_dispatch.inputs.modify_date.default' "$FILE")
+          echo "SYNC_PATH=$SYNC_PATH" >> $GITHUB_ENV
+          echo "OP_MODE=$OP_MODE" >> $GITHUB_ENV
+          echo "MODIFY_DATE=$MODIFY_DATE" >> $GITHUB_ENV
+
+      - name: Validate inputs
+        run: |
+          set -euo pipefail
+          if [ -z "$SYNC_PATH" ]; then
+            echo "::error::sync_path is empty"; exit 1; fi
+          if [ ! -d "$SYNC_PATH" ]; then
+            echo "::error::Directory does not exist: $SYNC_PATH"; exit 1; fi
+          MD_FILE=$(find "$SYNC_PATH" -maxdepth 1 -type f -name '*.md' | head -n1)
+          if [ -z "$MD_FILE" ]; then
+            echo "::error::No Markdown file found in $SYNC_PATH"; exit 1; fi
+          echo "MD_FILE=$MD_FILE" >> $GITHUB_ENV
+          if [[ "$OP_MODE" == *pdf* ]]; then
+            if [ -z "$MODIFY_DATE" ]; then
+              echo "::error::modify_date required for PDF generation"; exit 1; fi
+            if ! date -d "$MODIFY_DATE" '+%Y-%m-%d' >/dev/null 2>&1; then
+              echo "::error::modify_date is not a valid yyyy-mm-dd date: $MODIFY_DATE"; exit 1; fi
+          fi
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Setup Node.js 18
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Cache pip cache explicitly (fallback)
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('.github/src/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install system-level dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends pandoc bc wget ca-certificates
+          sudo apt-get install -y --no-install-recommends xfonts-75dpi fonts-liberation fonts-dejavu
+
+      - name: Install patched wkhtmltopdf (only if PDF mode)
+        if: contains(env.OP_MODE, 'pdf')
+        run: |
+          sudo apt-get remove -y wkhtmltopdf || true
+          TEMP_DEB=/tmp/wkhtmltox.deb
+          wget -qO "$TEMP_DEB" https://github.com/wkhtmltopdf/packaging/releases/download/0.12.6.1-2/wkhtmltox_0.12.6.1-2.jammy_amd64.deb
+          sudo dpkg -i "$TEMP_DEB" || sudo apt-get install -f -y
+          wkhtmltopdf --version
+
+      - name: Setup and install Python virtualenv & deps
+        run: |
+          set -euo pipefail
+          cd .github/src
+          python3 -m venv venv
+          source venv/bin/activate
+          pip install --upgrade pip
+          if [[ -f requirements.txt ]]; then
+            pip install -r requirements.txt
+          else
+            pip install beautifulsoup4 requests aiohttp aiofiles
+          fi
+
+      - name: Format Markdown with Prettier (if requested)
+        if: env.OP_MODE == 'format_and_convert' || env.OP_MODE == 'format_only' || env.OP_MODE == 'format_convert_pdf'
+        run: |
+          set -euo pipefail
+          npx prettier --write "$MD_FILE"
+
+      - name: Convert Markdown to HTML (if requested)
+        id: convert_html
+        if: env.OP_MODE == 'format_and_convert' || env.OP_MODE == 'convert_only' || env.OP_MODE == 'format_convert_pdf'
+        run: |
+          set -euo pipefail
+          cd .github/src
+          source venv/bin/activate
+          CONVERT_ARGS=()
+          if [[ "$OP_MODE" == 'format_and_convert' || "$OP_MODE" == 'format_convert_pdf' ]]; then
+            CONVERT_ARGS+=(--md-format)
+          fi
+          if [[ "$OP_MODE" == 'format_and_convert' || "$OP_MODE" == 'convert_only' || "$OP_MODE" == 'format_convert_pdf' ]]; then
+            CONVERT_ARGS+=(--md-to-html)
+          fi
+          python3 step_1_markdown_to_html_converter_V3_0.py "$MD_FILE" "$(pwd)/../" "$(dirname "$MD_FILE")" "${CONVERT_ARGS[@]}"
+        working-directory: .github/src
+
+      - name: Convert HTML to PDF (if in PDF mode)
+        id: generate_pdf
+        if: env.OP_MODE == 'format_convert_pdf'
+        run: |
+          set -euo pipefail
+          HTML_FILE=$(find "$SYNC_PATH" -maxdepth 3 -name '*.html' | head -n1)
+          if [ -z "$HTML_FILE" ]; then
+            echo "::error::No HTML file found to convert to PDF"; exit 1; fi
+          cd .github/src
+          source venv/bin/activate
+          export MODIFY_DATE="$MODIFY_DATE"
+          python3 step_2_convert_html_to_pdf.py "$HTML_FILE" "$MODIFY_DATE"
+        working-directory: .github/src
+
+      - name: Configure git for commit
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+
+      - name: Commit & push changes if any
+        run: |
+          set -euo pipefail
+          git add -A "${SYNC_PATH}/" || true
+          git add -A .github/src/styles/ || true
+          if git diff --cached --quiet; then
+            echo 'No changes to commit'
+          else
+            COMMIT_MSG="enterprise: ${OP_MODE} for ${SYNC_PATH} - generated on $(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+            git commit -m "$COMMIT_MSG"
+            git push
+          fi
+
+      - name: Mark commit processed
+        run: |
+          mkdir -p .github/workflow-data
+          touch .github/workflow-data/run-${{ github.sha }}.done
+          git add .github/workflow-data/run-${{ github.sha }}.done
+          git commit -m "chore: mark ${GITHUB_SHA} processed" || echo "No marker commit"
+          git push || echo "No changes to push"
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: conversion-results-${{ github.run_number }}
+          path: |
+            ${SYNC_PATH}/**/*.html
+            ${SYNC_PATH}/**/*.css
+            ${SYNC_PATH}/**/*.pdf
+            .github/src/markdown_conversion.log
+            conversion.log
+
+      - name: Summary
+        if: always()
+        run: |
+          echo '## ✅ Conversion summary' >> $GITHUB_STEP_SUMMARY
+          echo '| Field | Value |' >> $GITHUB_STEP_SUMMARY
+          echo '|-------|-------|' >> $GITHUB_STEP_SUMMARY
+          echo "| Sync Path | \`$SYNC_PATH\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Mode | \`$OP_MODE\` |" >> $GITHUB_STEP_SUMMARY
+          if [[ "$OP_MODE" == 'format_convert_pdf' ]]; then
+            echo "| Modify Date | \`$MODIFY_DATE\` |" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "| HTML Generated | ${{ steps.convert_html.outcome }} |" >> $GITHUB_STEP_SUMMARY
+          if [[ "$OP_MODE" == 'format_convert_pdf' ]]; then
+            echo "| PDF Generated | ${{ steps.generate_pdf.outcome }} |" >> $GITHUB_STEP_SUMMARY
+          fi
+
