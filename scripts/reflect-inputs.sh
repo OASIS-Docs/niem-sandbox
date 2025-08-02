@@ -2,10 +2,15 @@
 set -euo pipefail
 
 # Required environment variables: SYNC_PATH, OP_MODE, MODIFY_DATE
-# Optional: WORKFLOW_TOKEN, GITHUB_TOKEN, AUTH_TOKEN, GITHUB_REPOSITORY
+# Optional: WORKFLOW_TOKEN, GITHUB_REPOSITORY
 
-# Resolve authentication token priority: AUTH_TOKEN override, then WORKFLOW_TOKEN, then GITHUB_TOKEN.
-AUTH_TOKEN="${AUTH_TOKEN:-${WORKFLOW_TOKEN:-${GITHUB_TOKEN-}}}"
+# Always use WORKFLOW_TOKEN as the only token, and that's fucking that.
+AUTH_TOKEN="${WORKFLOW_TOKEN:-}"
+
+if [[ -z "${AUTH_TOKEN}" ]]; then
+  echo "ERROR: WORKFLOW_TOKEN is not set. Aborting." >&2
+  exit 1
+fi
 
 # Ensure yq pinned version is available
 YQ_BIN=/usr/local/bin/yq
@@ -41,7 +46,7 @@ git add "$WF"
 # Save original remote
 ORIG_URL=$(git remote get-url origin)
 
-# If we have an auth token, rewrite origin for authenticated push
+# Use WORKFLOW_TOKEN for authenticated push
 if [[ -n "${AUTH_TOKEN}" ]]; then
   if [[ -z "${GITHUB_REPOSITORY-}" ]]; then
     echo "WARNING: GITHUB_REPOSITORY not set; using existing origin URL"
@@ -54,10 +59,10 @@ fi
 # Always create (allow-empty) reflection commit and push
 git commit --allow-empty -m "chore: reflect runtime inputs sync_path='${SYNC_PATH}' operation_mode='${OP_MODE}' modify_date='${MODIFY_DATE}'"
 if ! git push; then
-  echo "Warning: push failed. Check token scopes/permissions and whether workflow updates are allowed." >&2
+  echo "Warning: push failed. Check WORKFLOW_TOKEN scopes/permissions and whether workflow updates are allowed." >&2
 fi
 
 # Restore original remote if mutated
-if [[ -n "${AUTH_TOKEN}" && -n "${ORIG_URL-}" ]]; then
+if [[ -n "${ORIG_URL-}" ]]; then
   git remote set-url origin "$ORIG_URL"
 fi
