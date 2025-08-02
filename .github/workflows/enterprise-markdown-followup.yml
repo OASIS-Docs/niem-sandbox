@@ -9,6 +9,7 @@ jobs:
   build:
     name: Build after Reflection Commit
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -153,10 +154,10 @@ jobs:
 
       - name: Convert Markdown to HTML (if requested)
         id: convert_html
+        working-directory: .github/src
         run: |
           set -euo pipefail
           if [[ "$OP_MODE" == "format_and_convert" || "$OP_MODE" == "convert_only" || "$OP_MODE" == "format_convert_pdf" ]]; then
-            cd .github/src
             source venv/bin/activate
             CONVERT_ARGS=()
             if [[ "$OP_MODE" == "format_and_convert" || "$OP_MODE" == "format_convert_pdf" ]]; then
@@ -169,10 +170,10 @@ jobs:
           else
             echo "Markdown→HTML conversion skipped per operation mode: $OP_MODE"
           fi
-        working-directory: .github/src
 
       - name: Convert HTML to PDF (if in PDF mode)
         id: generate_pdf
+        working-directory: .github/src
         run: |
           set -euo pipefail
           if [[ "$OP_MODE" == "format_convert_pdf" ]]; then
@@ -181,14 +182,12 @@ jobs:
               echo "::error::No HTML file found to convert to PDF"
               exit 1
             fi
-            cd .github/src
             source venv/bin/activate
             export MODIFY_DATE="$MODIFY_DATE"
             python3 step_2_convert_html_to_pdf.py "$HTML_FILE" "$MODIFY_DATE"
           else
             echo "PDF generation skipped per operation mode: $OP_MODE"
           fi
-        working-directory: .github/src
 
       - name: Configure git for commit
         run: |
