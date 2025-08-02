@@ -1,18 +1,14 @@
 name: Enterprise Markdown Follow-up
-
 on:
   push:
     paths:
       - ".github/workflows/enterprise-markdown-convert.yml"
-
 env:
   PYTHONUNBUFFERED: '1'
   PIP_NO_CACHE_DIR: '0'
-
 permissions:
   contents: write
   workflows: write
-
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -26,7 +22,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: true
 
-      - name: Guard: reflection commit and dedupe
+      - name: Guard reflection commit and dedupe
         id: guard
         run: |
           set -euo pipefail
