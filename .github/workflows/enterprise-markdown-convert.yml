@@ -35,7 +35,6 @@ env:
 
 permissions:
   contents: write
-  workflows: write
 
 jobs:
   reflect-inputs:
@@ -43,7 +42,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      workflows: write
     outputs:
       reflected: true
     steps:
@@ -72,7 +70,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          # Ensure yq is installed
           if ! command -v yq >/dev/null 2>&1; then
             echo "Installing yq..."
             curl -fsSL -o /tmp/yq_linux_amd64 https://github.com/mikefarah/yq/releases/download/v4.40.5/yq_linux_amd64
@@ -106,21 +103,16 @@ jobs:
           git config user.email "self-reflector@users.noreply.github.com"
           git add .github/workflows/enterprise-markdown-convert.yml
 
-          # Prepare authenticated push URL using available token with fallback priority
           AUTH_TOKEN="${WORKFLOW_TOKEN:-${GITHUB_TOKEN-}}"
           ORIG_URL=$(git remote get-url origin)
           if [[ -n "${AUTH_TOKEN}" ]]; then
-            AUTH_URL="https://x-access-token:${AUTH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-            git remote set-url origin "$AUTH_URL"
+            git remote set-url origin "https://x-access-token:${AUTH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           fi
 
           git commit --allow-empty -m "chore: reflect runtime inputs sync_path='${{ github.event.inputs.sync_path }}' operation_mode='${{ github.event.inputs.operation_mode }}' modify_date='${{ github.event.inputs.modify_date }}'"
           if ! git push; then
             echo "Warning: push failed. Inspect token scopes/permissions." >&2
           fi
-
-      - name: Setup / Validate for build output
-        run: echo "Reflection done, proceeding to build." 
 
   build:
     name: Format / Convert / PDF
