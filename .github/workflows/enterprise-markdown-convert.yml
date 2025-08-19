@@ -1,4 +1,4 @@
-name: Enterprise Markdown → HTML (± PDF) Converter (self-reflecting, no cache)
+name: 0 Enterprise Markdown → HTML (± PDF) Converter (self-reflecting, no cache)
 
 on:
   workflow_dispatch:
@@ -40,6 +40,8 @@ jobs:
   reflect-inputs:
     name: Reflect Inputs into Workflow YAML
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     outputs:
       reflected: true
     steps:
@@ -49,38 +51,70 @@ jobs:
           fetch-depth: 0
           persist-credentials: true
 
-      - name: Install yq for in-place YAML editing
+      - name: Run reflection script
+        env:
+          SYNC_PATH: ${{ github.event.inputs.sync_path }}
+          OP_MODE: ${{ github.event.inputs.operation_mode }}
+          MODIFY_DATE: ${{ github.event.inputs.modify_date }}
+          WORKFLOW_TOKEN: ${{ secrets.WORKFLOW_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          chmod +x ./scripts/reflect-inputs.sh
+          ./scripts/reflect-inputs.sh
+
+      - name: Inline reflect inputs (fallback)
+        if: failure()
+        env:
+          WORKFLOW_TOKEN: ${{ secrets.WORKFLOW_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          if ! command -v yq >/dev/null; then
-            sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
-            sudo chmod +x /usr/local/bin/yq
+          if ! command -v yq >/dev/null 2>&1; then
+            echo "Installing yq..."
+            curl -fsSL -o /tmp/yq_linux_amd64 https://github.com/mikefarah/yq/releases/download/v4.40.5/yq_linux_amd64
+            sudo install -m 0755 /tmp/yq_linux_amd64 /usr/local/bin/yq
           fi
           yq --version
 
-      - name: Replace defaults with runtime inputs
-        run: |
-          set -euo pipefail
           WF=".github/workflows/enterprise-markdown-convert.yml"
           if [[ ! -f "$WF" ]]; then
             echo "::error::workflow file missing at $WF"
             exit 1
           fi
           cp "$WF" "${WF}.bak"
-          /usr/local/bin/yq eval --inplace ".on.workflow_dispatch.inputs.sync_path.default = \"${{ github.event.inputs.sync_path }}\"" "$WF"
-          /usr/local/bin/yq eval --inplace ".on.workflow_dispatch.inputs.operation_mode.default = \"${{ github.event.inputs.operation_mode }}\"" "$WF"
-          /usr/local/bin/yq eval --inplace ".on.workflow_dispatch.inputs.modify_date.default = \"${{ github.event.inputs.modify_date }}\"" "$WF"
-          echo "Diff after reflection:" 
+
+          yq eval --inplace ".on.workflow_dispatch.inputs.sync_path.default = \"${{ github.event.inputs.sync_path }}\"" "$WF"
+          yq eval --inplace ".on.workflow_dispatch.inputs.operation_mode.default = \"${{ github.event.inputs.operation_mode }}\"" "$WF"
+          yq eval --inplace ".on.workflow_dispatch.inputs.modify_date.default = \"${{ github.event.inputs.modify_date }}\"" "$WF"
+
+          echo "Diff after reflection:"
           diff -u "${WF}.bak" "$WF" || true
 
-      - name: Commit reflection
+      - name: Commit reflection (fallback)
+        env:
+          WORKFLOW_TOKEN: ${{ secrets.WORKFLOW_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
           git config user.name "self-reflector[bot]"
           git config user.email "self-reflector@users.noreply.github.com"
           git add .github/workflows/enterprise-markdown-convert.yml
+      
+          if [[ -z "${WORKFLOW_TOKEN:-}" ]]; then
+            echo "::error::WORKFLOW_TOKEN is not set. Aborting push."
+            exit 1
+          fi
+      
+          ORIG_URL=$(git remote get-url origin)
+          git remote set-url origin "https://x-access-token:${WORKFLOW_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+      
           git commit --allow-empty -m "chore: reflect runtime inputs sync_path='${{ github.event.inputs.sync_path }}' operation_mode='${{ github.event.inputs.operation_mode }}' modify_date='${{ github.event.inputs.modify_date }}'"
-          git push
+          if ! git push; then
+            echo "Warning: push failed. Inspect WORKFLOW_TOKEN scopes/permissions." >&2
+          fi
+      
+          git remote set-url origin "$ORIG_URL"
 
   build:
     name: Format / Convert / PDF
@@ -118,15 +152,15 @@ jobs:
           echo "OP_MODE=${{ github.event.inputs.operation_mode }}" >> $GITHUB_ENV
           echo "MODIFY_DATE=${{ github.event.inputs.modify_date }}" >> $GITHUB_ENV
 
-      - name: Setup Python 3.11
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
-
       - name: Setup Node.js 18
         uses: actions/setup-node@v4
         with:
           node-version: '18'
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
 
       - name: Install system-level dependencies
         run: |
@@ -136,14 +170,17 @@ jobs:
           sudo apt-get install -y --no-install-recommends xfonts-75dpi fonts-liberation fonts-dejavu
 
       - name: Install patched wkhtmltopdf (only if PDF mode)
-        if: contains(github.event.inputs.operation_mode, 'pdf')
         run: |
           set -euo pipefail
-          sudo apt-get remove -y wkhtmltopdf || true
-          TEMP_DEB=/tmp/wkhtmltox.deb
-          wget -qO "$TEMP_DEB" https://github.com/wkhtmltopdf/packaging/releases/download/0.12.6.1-2/wkhtmltox_0.12.6.1-2.jammy_amd64.deb
-          sudo dpkg -i "$TEMP_DEB" || sudo apt-get install -f -y
-          wkhtmltopdf --version
+          if [[ "${{ env.OP_MODE }}" == *pdf* ]]; then
+            sudo apt-get remove -y wkhtmltopdf || true
+            TEMP_DEB=/tmp/wkhtmltox.deb
+            wget -qO "$TEMP_DEB" https://github.com/wkhtmltopdf/packaging/releases/download/0.12.6.1-2/wkhtmltox_0.12.6.1-2.jammy_amd64.deb
+            sudo dpkg -i "$TEMP_DEB" || sudo apt-get install -f -y
+            wkhtmltopdf --version
+          else
+            echo "Skipping wkhtmltopdf install (mode=${{ env.OP_MODE }})"
+          fi
 
       - name: Setup and install Python virtualenv & deps
         run: |
@@ -259,6 +296,6 @@ jobs:
             fi
             echo "| HTML Generated | ${{ steps.convert_html.outcome }} |"
             if [[ "${{ env.OP_MODE }}" == "format_convert_pdf" ]]; then
-              echo "| PDF Generated | \`${{ steps.generate_pdf.outcome }}\` |"
+              echo "| PDF Generated | \`${{ env.generate_pdf.outcome }}\` |"
             fi
           } >> $GITHUB_STEP_SUMMARY

@@ -1,0 +1,261 @@
+name: Enterprise Markdown Follow-up
+
+on:
+  push:
+    paths:
+      - ".github/workflows/enterprise-markdown-convert.yml"
+
+env:
+  PYTHONUNBUFFERED: '1'
+  PIP_NO_CACHE_DIR: '0'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_REPOSITORY: ${{ github.repository }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Guard reflection commit and dedupe
+        id: guard
+        run: |
+          set -euo pipefail
+          MSG=$(git log -1 --pretty=%s)
+          if [[ "$MSG" != chore:\ reflect\ runtime\ inputs* ]]; then
+            echo "continue=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          SHA=$(git rev-parse HEAD)
+          MARKER=".github/workflow-data/run-${SHA}.done"
+          if [[ -f "$MARKER" ]]; then
+            echo "continue=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          echo "continue=true" >> $GITHUB_OUTPUT
+          echo "MARKER=$MARKER" >> $GITHUB_ENV
+
+      - name: Read reflected defaults
+        if: steps.guard.outputs.continue == 'true'
+        run: |
+          set -euo pipefail
+          if ! command -v yq >/dev/null 2>&1; then
+            echo "Installing yq..."
+            curl -fsSL -o /tmp/yq_linux_amd64 https://github.com/mikefarah/yq/releases/download/v4.40.5/yq_linux_amd64
+            sudo install -m 0755 /tmp/yq_linux_amd64 /usr/local/bin/yq
+          fi
+          yq --version
+          WF=".github/workflows/enterprise-markdown-convert.yml"
+          SYNC_PATH=$(yq e '.on.workflow_dispatch.inputs.sync_path.default' "$WF")
+          OP_MODE=$(yq e '.on.workflow_dispatch.inputs.operation_mode.default' "$WF")
+          MODIFY_DATE=$(yq e '.on.workflow_dispatch.inputs.modify_date.default' "$WF")
+          echo "SYNC_PATH=$SYNC_PATH" >> $GITHUB_ENV
+          echo "OP_MODE=$OP_MODE" >> $GITHUB_ENV
+          echo "MODIFY_DATE=$MODIFY_DATE" >> $GITHUB_ENV
+
+      - name: Validate & locate Markdown
+        if: steps.guard.outputs.continue == 'true'
+        run: |
+          set -euo pipefail
+          SYNC_PATH="$(echo "$SYNC_PATH" | tr -d '\r\n' | xargs)"
+          if [[ -z "$SYNC_PATH" ]]; then
+            echo "::error::SYNC_PATH is empty"
+            exit 1
+          fi
+          if [[ ! -d "$SYNC_PATH" ]]; then
+            echo "::error::Directory does not exist: $SYNC_PATH"
+            ls -1 | head -30
+            exit 1
+          fi
+          MD_FILE=$(find "$SYNC_PATH" -maxdepth 1 -type f -name '*.md' | head -n1)
+          if [[ -z "$MD_FILE" ]]; then
+            echo "::error::No Markdown file found in $SYNC_PATH"
+            exit 1
+          fi
+          echo "MD_FILE=$MD_FILE" >> $GITHUB_ENV
+
+      - name: Setup Node.js 18
+        if: steps.guard.outputs.continue == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Setup Python 3.11
+        if: steps.guard.outputs.continue == 'true'
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install system-level dependencies
+        if: steps.guard.outputs.continue == 'true'
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends pandoc bc wget ca-certificates
+          sudo apt-get install -y --no-install-recommends xfonts-75dpi fonts-liberation fonts-dejavu
+
+      - name: Install patched wkhtmltopdf (only if PDF mode)
+        if: steps.guard.outputs.continue == 'true'
+        run: |
+          set -euo pipefail
+          if [[ "$OP_MODE" == *pdf* ]]; then
+            sudo apt-get remove -y wkhtmltopdf || true
+            TEMP_DEB=/tmp/wkhtmltox.deb
+            wget -qO "$TEMP_DEB" https://github.com/wkhtmltopdf/packaging/releases/download/0.12.6.1-2/wkhtmltox_0.12.6.1-2.jammy_amd64.deb
+            sudo dpkg -i "$TEMP_DEB" || sudo apt-get install -f -y
+            wkhtmltopdf --version
+          else
+            echo "Skipping wkhtmltopdf install (mode=$OP_MODE)"
+          fi
+
+      - name: Setup and install Python virtualenv & deps
+        if: steps.guard.outputs.continue == 'true'
+        run: |
+          set -euo pipefail
+          cd .github/src
+          python3 -m venv venv
+          source venv/bin/activate
+          pip install --upgrade pip
+          if [[ -f requirements.txt ]]; then
+            pip install -r requirements.txt
+          else
+            pip install beautifulsoup4 requests aiohttp aiofiles
+          fi
+
+      - name: Format Markdown with Prettier (if requested)
+        if: steps.guard.outputs.continue == 'true'
+        run: |
+          set -euo pipefail
+          if [[ "$OP_MODE" == "format_and_convert" || "$OP_MODE" == "format_only" || "$OP_MODE" == "format_convert_pdf" ]]; then
+            npx prettier --write "$MD_FILE"
+          else
+            echo "Skipping formatting (mode=$OP_MODE)"
+          fi
+
+      - name: Convert Markdown to HTML (if requested)
+        if: steps.guard.outputs.continue == 'true'
+        working-directory: .github/src
+        run: |
+          set -euo pipefail
+          if [[ "$OP_MODE" == "format_and_convert" || "$OP_MODE" == "convert_only" || "$OP_MODE" == "format_convert_pdf" ]]; then
+            source venv/bin/activate
+            CONVERT_ARGS=()
+            if [[ "$OP_MODE" == "format_and_convert" || "$OP_MODE" == "format_convert_pdf" ]]; then
+              CONVERT_ARGS+=(--md-format)
+            fi
+            if [[ "$OP_MODE" == "format_and_convert" || "$OP_MODE" == "convert_only" || "$OP_MODE" == "format_convert_pdf" ]]; then
+              CONVERT_ARGS+=(--md-to-html)
+            fi
+            python3 step_1_markdown_to_html_converter_V3_0.py "$MD_FILE" "$(pwd)/../../" "$(dirname "$MD_FILE")" "${CONVERT_ARGS[@]}"
+          else
+            echo "Skipping Markdown→HTML conversion (mode=$OP_MODE)"
+          fi
+
+      - name: Convert HTML to PDF (if in PDF mode)
+        if: steps.guard.outputs.continue == 'true'
+        working-directory: .github/src
+        run: |
+          set -euo pipefail
+          if [[ "$OP_MODE" == "format_convert_pdf" ]]; then
+            if [[ -z "$MODIFY_DATE" ]]; then
+              echo "::error::modify_date is required for PDF generation"
+              exit 1
+            fi
+            if ! date -d "$MODIFY_DATE" '+%Y-%m-%d' >/dev/null 2>&1; then
+              echo "::error::modify_date is not a valid yyyy-mm-dd date: $MODIFY_DATE"
+              exit 1
+            fi
+            HTML_FILE=$(find "$SYNC_PATH" -maxdepth 3 -name '*.html' | head -n1)
+            if [[ -z "$HTML_FILE" ]]; then
+              echo "::error::No HTML file found to convert to PDF"
+              exit 1
+            fi
+            source venv/bin/activate
+            python3 step_2_convert_html_to_pdf.py "$HTML_FILE" "$MODIFY_DATE"
+          else
+            echo "Skipping PDF generation (mode=$OP_MODE)"
+          fi
+
+      - name: Configure git for commit
+        if: steps.guard.outputs.continue == 'true'
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+
+      - name: Commit & push changes if any
+        if: steps.guard.outputs.continue == 'true'
+        env:
+          WORKFLOW_TOKEN: ${{ secrets.WORKFLOW_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          AUTH_TOKEN="${WORKFLOW_TOKEN:-${GITHUB_TOKEN}}"
+          ORIG_URL=$(git remote get-url origin || true)
+          if [[ -n "$AUTH_TOKEN" && -n "${GITHUB_REPOSITORY-}" ]]; then
+            git remote set-url origin "https://x-access-token:${AUTH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          fi
+          git add -A "${SYNC_PATH}/" || true
+          git add -A .github/src/styles/ || true
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            COMMIT_MSG="enterprise: ${OP_MODE} for ${SYNC_PATH} - generated on $(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+            git commit -m "$COMMIT_MSG"
+            git push
+          fi
+          if [[ -n "$AUTH_TOKEN" && -n "$ORIG_URL" ]]; then
+            git remote set-url origin "$ORIG_URL"
+          fi
+
+      - name: Mark SHA as processed
+        if: steps.guard.outputs.continue == 'true'
+        env:
+          WORKFLOW_TOKEN: ${{ secrets.WORKFLOW_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          AUTH_TOKEN="${WORKFLOW_TOKEN:-${GITHUB_TOKEN}}"
+          ORIG_URL=$(git remote get-url origin || true)
+          if [[ -n "$AUTH_TOKEN" && -n "${GITHUB_REPOSITORY-}" ]]; then
+            git remote set-url origin "https://x-access-token:${AUTH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          fi
+          touch "${MARKER}"
+          git add "${MARKER}"
+          git commit -m "chore: mark ${GITHUB_SHA} as processed" || true
+          git push || true
+          if [[ -n "$AUTH_TOKEN" && -n "$ORIG_URL" ]]; then
+            git remote set-url origin "$ORIG_URL"
+          fi
+
+      - name: Upload artifacts
+        if: always() && steps.guard.outputs.continue == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: followup-results-${{ github.run_number }}
+          path: |
+            ${SYNC_PATH}/**/*.html
+            ${SYNC_PATH}/**/*.css
+            ${SYNC_PATH}/**/*.pdf
+            .github/src/markdown_conversion.log
+            conversion.log
+
+      - name: Summary notices
+        if: always() && steps.guard.outputs.continue == 'true'
+        run: |
+          {
+            echo "## ✅ Conversion summary"
+            echo "| Field | Value |"
+            echo "|-------|-------|"
+            echo "| Sync Path | \`${SYNC_PATH}\` |"
+            echo "| Mode | \`${OP_MODE}\` |"
+            if [[ "$OP_MODE" == "format_convert_pdf" ]]; then
+              echo "| Modify Date | \`${MODIFY_DATE}\` |"
+            fi
+          } >> $GITHUB_STEP_SUMMARY
